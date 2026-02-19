@@ -8,14 +8,114 @@ import {
 // ─────────────────────────────────────────────
 // DATA
 // ─────────────────────────────────────────────
-const ZONE_MAPPING = {
-  "Kuala Lumpur": "WLY01", "Putrajaya": "WLY01", "Bangi": "SGR01",
-  "Petaling Jaya": "SGR01", "Shah Alam": "SGR01", "Johor Bahru": "JHR02",
-  "Kota Bharu": "KTN01", "Georgetown": "PNG01", "Kuching": "SWK08",
-  "Kota Kinabalu": "SBH07", "Kuantan": "PHG02", "Seremban": "NSN01",
-  "Melaka": "MLK01", "Alor Setar": "KDH01", "Kangar": "PsL01",
-  "Kuala Terengganu": "TRG01", "Ipoh": "PRK02"
-};
+
+// Full JAKIM zone list for manual picker (grouped by state)
+const ALL_ZONES = [
+  // Wilayah Persekutuan
+  { code: "WLY01", label: "Kuala Lumpur / Putrajaya", state: "Wilayah Persekutuan" },
+  { code: "WLY02", label: "Labuan", state: "Wilayah Persekutuan" },
+  // Johor
+  { code: "JHR01", label: "Pulau Aur / Pemanggil", state: "Johor" },
+  { code: "JHR02", label: "Johor Bahru / Kota Tinggi / Mersing", state: "Johor" },
+  { code: "JHR03", label: "Batu Pahat / Muar / Segamat / Gemas Johor / Kluang / Pontian", state: "Johor" },
+  { code: "JHR04", label: "Kota Tinggi / Mersing", state: "Johor" },
+  // Kedah
+  { code: "KDH01", label: "Kota Setar / Kubang Pasu / Padang Terap / Pokok Sena", state: "Kedah" },
+  { code: "KDH02", label: "Kuala Muda / Yan / Sik", state: "Kedah" },
+  { code: "KDH03", label: "Baling", state: "Kedah" },
+  { code: "KDH04", label: "Bandar Bahru / Kulim", state: "Kedah" },
+  // Kelantan
+  { code: "KTN01", label: "Kota Bharu / Bachok / Pasir Puteh / Tumpat / Pasir Mas / Tanah Merah / Machang / Jeli / Kuala Krai", state: "Kelantan" },
+  { code: "KTN03", label: "Gua Musang (Daerah Galas Dan Bertam) / Jeli", state: "Kelantan" },
+  // Melaka
+  { code: "MLK01", label: "Seluruh Melaka", state: "Melaka" },
+  // Negeri Sembilan
+  { code: "NSN01", label: "Jempol / Tampin", state: "Negeri Sembilan" },
+  { code: "NSN02", label: "Jelebu / Kuala Pilah / Seremban", state: "Negeri Sembilan" },
+  { code: "NSN03", label: "Port Dickson / Rembau", state: "Negeri Sembilan" },
+  // Pahang
+  { code: "PHG01", label: "Pulau Tioman", state: "Pahang" },
+  { code: "PHG02", label: "Kuantan / Pekan / Rompin / Muadzam Shah", state: "Pahang" },
+  { code: "PHG03", label: "Bentong / Raub", state: "Pahang" },
+  { code: "PHG04", label: "Temerloh / Maran / Jerantut / Chenor / Jengka", state: "Pahang" },
+  { code: "PHG05", label: "Bera / Nenasi", state: "Pahang" },
+  // Perlis
+  { code: "PLS01", label: "Kangar / Arau / Padang Besar", state: "Perlis" },
+  // Pulau Pinang
+  { code: "PNG01", label: "Seluruh Pulau Pinang", state: "Pulau Pinang" },
+  // Perak
+  { code: "PRK01", label: "Tapah / Slim River / Tanjung Malim", state: "Perak" },
+  { code: "PRK02", label: "Ipoh / Batu Gajah / Kampar / Sungai Siput / Teluk Intan", state: "Perak" },
+  { code: "PRK03", label: "Lenggong / Pengkalan Hulu / Grik", state: "Perak" },
+  { code: "PRK04", label: "Temengor / Belum", state: "Perak" },
+  { code: "PRK05", label: "Selama", state: "Perak" },
+  { code: "PRK06", label: "Parit Buntar / Bagan Serai / Penaga", state: "Perak" },
+  { code: "PRK07", label: "Pangkor", state: "Perak" },
+  // Selangor
+  { code: "SGR01", label: "Gombak / Hulu Selangor / Rawang / Hulu Langat / Sepang / Petaling", state: "Selangor" },
+  { code: "SGR02", label: "Sabak Bernam / Kuala Selangor / Klang / Kuala Langat", state: "Selangor" },
+  { code: "SGR03", label: "Shah Alam", state: "Selangor" },
+  // Terengganu
+  { code: "TRG01", label: "Kuala Terengganu / Marang / Kuala Nerus", state: "Terengganu" },
+  { code: "TRG02", label: "Besut / Setiu", state: "Terengganu" },
+  { code: "TRG03", label: "Hulu Terengganu", state: "Terengganu" },
+  { code: "TRG04", label: "Kemaman / Dungun", state: "Terengganu" },
+  // Sabah
+  { code: "SBH01", label: "Kota Marudu / Pitas / Kudat", state: "Sabah" },
+  { code: "SBH02", label: "Beluran / Sandakan / Kinabatangan", state: "Sabah" },
+  { code: "SBH03", label: "Lahad Datu / Semporna / Tawau / Kunak", state: "Sabah" },
+  { code: "SBH04", label: "Sipitang / Pensiangan / Hulu Sipitang / Ranau / Keningau / Tambunan / Nabawan", state: "Sabah" },
+  { code: "SBH05", label: "Beaufort / Kuala Penyu / Menumbok / Papar / Kota Belud", state: "Sabah" },
+  { code: "SBH06", label: "Kota Kinabalu / Penampang / Putatan / Tuaran", state: "Sabah" },
+  { code: "SBH07", label: "Kudat / Kota Marudu / Pitas", state: "Sabah" },
+  // Sarawak
+  { code: "SWK01", label: "Limbang / Lawas / Sundar / Trusan", state: "Sarawak" },
+  { code: "SWK02", label: "Miri / Niah / Bekenu / Sibuti / Marudi", state: "Sarawak" },
+  { code: "SWK03", label: "Pandan / Belaga / Suai / Tatau / Sebauh / Bintulu", state: "Sarawak" },
+  { code: "SWK04", label: "Kapit / Lubok Antu / Song", state: "Sarawak" },
+  { code: "SWK05", label: "Sri Aman / Lubok Antu / Betong / Spaoh / Pusa / Saratok / Roban / Debak", state: "Sarawak" },
+  { code: "SWK06", label: "Sibu / Mukah / Dalat / Song / Igan / Kanowit / Selangau", state: "Sarawak" },
+  { code: "SWK07", label: "Serian / Simunjan / Samarahan / Bau / Lundu / Sematan", state: "Sarawak" },
+  { code: "SWK08", label: "Kuching", state: "Sarawak" },
+];
+
+/**
+ * Convert Unix timestamp (seconds) to "HH:MM" string in local time.
+ * The API returns prayer times as Unix epoch seconds.
+ */
+function tsToHHMM(ts) {
+  if (!ts) return '--:--';
+  const d = new Date(ts * 1000);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+/**
+ * Find today's prayer entry from the prayers array.
+ * Each entry has a `date` field in "YYYY-MM-DD" or Unix timestamp form.
+ */
+function findTodayPrayer(prayers) {
+  if (!prayers?.length) return null;
+  const today = new Date();
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
+  // Try matching by date string first
+  const byDate = prayers.find(p => {
+    if (typeof p.date === 'string') return p.date === todayStr;
+    if (typeof p.date === 'number') {
+      const d = new Date(p.date * 1000);
+      const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      return ds === todayStr;
+    }
+    return false;
+  });
+  if (byDate) return byDate;
+
+  // Fallback: match by day of month
+  return prayers.find(p => {
+    const day = p.day || (p.date ? new Date(p.date * 1000).getDate() : null);
+    return day === today.getDate();
+  }) || prayers[today.getDate() - 1] || prayers[0];
+}
 
 const MISSIONS = [
   { day: 1, title: "Niat Padu", task: "Hafal niat puasa dengan betul", icon: "🌙", xp: 10, category: "ibadah" },
@@ -324,6 +424,94 @@ const UstazModal = ({ type, onClose }) => {
 };
 
 // ─────────────────────────────────────────────
+// ZONE PICKER MODAL
+// ─────────────────────────────────────────────
+const ZonePicker = ({ onSelect, onClose }) => {
+  const [search, setSearch] = useState('');
+  const states = [...new Set(ALL_ZONES.map(z => z.state))];
+
+  const filtered = ALL_ZONES.filter(z =>
+    z.label.toLowerCase().includes(search.toLowerCase()) ||
+    z.state.toLowerCase().includes(search.toLowerCase()) ||
+    z.code.toLowerCase().includes(search.toLowerCase())
+  );
+
+  return (
+    <div className="fixed inset-0 z-[300] flex flex-col bg-white">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-emerald-600 to-teal-700 text-white px-5 pt-12 pb-5">
+        <div className="flex items-center gap-3 mb-4">
+          <button onClick={onClose} className="w-9 h-9 bg-white/20 rounded-full flex items-center justify-center">
+            <X size={16} />
+          </button>
+          <div>
+            <h2 className="font-display text-xl">Pilih Kawasan</h2>
+            <p className="text-[10px] opacity-70 font-bold">Lokasi auto tidak berjaya. Pilih manual.</p>
+          </div>
+        </div>
+        {/* Search bar */}
+        <div className="bg-white/20 rounded-2xl flex items-center px-4 py-3 gap-3">
+          <MapPin size={16} className="opacity-60" />
+          <input
+            type="text"
+            placeholder="Cari bandar atau kod zon..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="bg-transparent flex-1 text-sm font-bold placeholder:opacity-50 outline-none"
+            autoFocus
+          />
+        </div>
+      </div>
+
+      {/* Zone list */}
+      <div className="flex-1 overflow-y-auto pb-10">
+        {search ? (
+          <div className="p-4 space-y-2">
+            {filtered.map(z => (
+              <button key={z.code} onClick={() => onSelect(z)}
+                className="w-full text-left px-4 py-3 bg-slate-50 hover:bg-emerald-50 rounded-2xl transition-all border border-slate-100 hover:border-emerald-200">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <p className="font-black text-sm text-slate-800">{z.label.split('/')[0].trim()}</p>
+                    <p className="text-[10px] text-slate-400 font-bold">{z.state} · {z.code}</p>
+                  </div>
+                  <span className="text-[9px] bg-emerald-100 text-emerald-700 font-black px-2 py-1 rounded-full">{z.code}</span>
+                </div>
+              </button>
+            ))}
+            {filtered.length === 0 && (
+              <div className="text-center py-10 text-slate-400">
+                <p className="text-4xl mb-3">🔍</p>
+                <p className="font-bold text-sm">Tiada kawasan dijumpai</p>
+              </div>
+            )}
+          </div>
+        ) : (
+          states.map(state => (
+            <div key={state}>
+              <div className="px-5 py-3 bg-slate-50 border-b border-slate-100 sticky top-0">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{state}</p>
+              </div>
+              <div className="p-3 space-y-2">
+                {ALL_ZONES.filter(z => z.state === state).map(z => (
+                  <button key={z.code} onClick={() => onSelect(z)}
+                    className="w-full text-left px-4 py-3 hover:bg-emerald-50 rounded-xl transition-all hover:border-emerald-200 border border-transparent">
+                    <div className="flex justify-between items-center">
+                      <p className="font-bold text-sm text-slate-700">{z.label.split('/')[0].trim()}</p>
+                      <span className="text-[9px] bg-slate-100 text-slate-500 font-black px-2 py-1 rounded-full">{z.code}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────
 // MAIN APP
 // ─────────────────────────────────────────────
 export default function App() {
@@ -344,7 +532,11 @@ export default function App() {
   const [streakDays, setStreakDays] = useState(() => {
     try { return parseInt(localStorage.getItem('gp_streak') || '0'); } catch { return 0; }
   });
-  const [zoneCode] = useState('SGR01');
+  // Zone state — persisted so we don't re-prompt on every load
+  const [zoneCode, setZoneCode] = useState(() => localStorage.getItem('gp_zone') || null);
+  const [zoneName, setZoneName] = useState(() => localStorage.getItem('gp_zone_name') || '');
+  const [locationStatus, setLocationStatus] = useState('idle'); // idle | detecting | found | denied | error
+  const [showZonePicker, setShowZonePicker] = useState(false);
   const [missionFilter, setMissionFilter] = useState('all');
   const [justCompleted, setJustCompleted] = useState(null);
 
@@ -367,20 +559,122 @@ export default function App() {
     localStorage.setItem('gp_streak', String(streakDays));
   }, [completedMissions, totalXP, streakDays]);
 
-  // Fetch prayer times
+  // Persist zone
   useEffect(() => {
-    const fetchTimes = async () => {
-      try {
-        const res = await fetch(`https://api.waktusolat.app/v2/solat/zone/${zoneCode}`);
-        const data = await res.json();
-        if (data.prayers?.[0]) setPrayerTimes(data.prayers[0]);
-      } catch {
-        // Fallback times for Selangor
-        setPrayerTimes({ imsak: '05:47', fajr: '05:57', dhuhr: '13:20', asr: '16:39', maghrib: '19:22', isha: '20:34' });
+    if (zoneCode) localStorage.setItem('gp_zone', zoneCode);
+    if (zoneName) localStorage.setItem('gp_zone_name', zoneName);
+  }, [zoneCode, zoneName]);
+
+  /**
+   * Fetch prayer times for a given zone code.
+   * API: GET https://api.waktusolat.app/v2/solat/zone/{zone}
+   * Returns { zone, prayers: [ { date, day, imsak, fajr, syuruk, dhuhr, asr, maghrib, isha, ... } ] }
+   * Times are Unix timestamps (seconds).
+   */
+  const fetchPrayersByZone = useCallback(async (code) => {
+    try {
+      const res = await fetch(`https://api.waktusolat.app/v2/solat/zone/${code}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const prayers = data.prayers || data.data?.prayers || [];
+      const todayEntry = findTodayPrayer(prayers);
+      if (!todayEntry) throw new Error('No prayer data for today');
+
+      // Normalise: convert Unix ts → HH:MM strings
+      setPrayerTimes({
+        imsak:   tsToHHMM(todayEntry.imsak),
+        fajr:    tsToHHMM(todayEntry.fajr),
+        syuruk:  tsToHHMM(todayEntry.syuruk),
+        dhuhr:   tsToHHMM(todayEntry.dhuhr),
+        asr:     tsToHHMM(todayEntry.asr),
+        maghrib: tsToHHMM(todayEntry.maghrib),
+        isha:    tsToHHMM(todayEntry.isha),
+      });
+      setLocationStatus('found');
+    } catch (err) {
+      console.error('Prayer fetch error:', err);
+      // Hard-coded Selangor fallback so UI never breaks
+      setPrayerTimes({ imsak: '05:47', fajr: '05:57', syuruk: '07:08', dhuhr: '13:20', asr: '16:39', maghrib: '19:22', isha: '20:34' });
+      setLocationStatus('error');
+    }
+  }, []);
+
+  /**
+   * Detect zone via GPS coordinates.
+   * API: GET https://api.waktusolat.app/v2/solat/gps?lat={lat}&lng={lng}
+   * Returns { zone, prayers: [...] }
+   */
+  const detectZoneByGPS = useCallback(async (lat, lng) => {
+    try {
+      const res = await fetch(`https://api.waktusolat.app/v2/solat/gps?lat=${lat}&lng=${lng}`);
+      if (!res.ok) throw new Error(`GPS zone error HTTP ${res.status}`);
+      const data = await res.json();
+      const detectedZone = data.zone || data.data?.zone;
+      if (!detectedZone) throw new Error('No zone returned from GPS');
+
+      // Find matching zone label
+      const zoneInfo = ALL_ZONES.find(z => z.code === detectedZone);
+      const label = zoneInfo ? `${zoneInfo.state} · ${zoneInfo.label.split('/')[0].trim()}` : detectedZone;
+
+      setZoneCode(detectedZone);
+      setZoneName(label);
+
+      // If GPS response already includes prayers, parse directly
+      const prayers = data.prayers || data.data?.prayers || [];
+      if (prayers.length > 0) {
+        const todayEntry = findTodayPrayer(prayers);
+        if (todayEntry) {
+          setPrayerTimes({
+            imsak:   tsToHHMM(todayEntry.imsak),
+            fajr:    tsToHHMM(todayEntry.fajr),
+            syuruk:  tsToHHMM(todayEntry.syuruk),
+            dhuhr:   tsToHHMM(todayEntry.dhuhr),
+            asr:     tsToHHMM(todayEntry.asr),
+            maghrib: tsToHHMM(todayEntry.maghrib),
+            isha:    tsToHHMM(todayEntry.isha),
+          });
+          setLocationStatus('found');
+          return;
+        }
       }
-    };
-    fetchTimes();
-  }, [zoneCode]);
+      // Otherwise fetch by detected zone
+      await fetchPrayersByZone(detectedZone);
+    } catch (err) {
+      console.error('GPS zone detection failed:', err);
+      // Fall back to manual picker
+      setLocationStatus('denied');
+      setShowZonePicker(true);
+    }
+  }, [fetchPrayersByZone]);
+
+  // On mount: if we have a saved zone, use it. Otherwise try geolocation.
+  useEffect(() => {
+    const saved = localStorage.getItem('gp_zone');
+    if (saved) {
+      fetchPrayersByZone(saved);
+      return;
+    }
+
+    if (!('geolocation' in navigator)) {
+      setLocationStatus('denied');
+      setShowZonePicker(true);
+      return;
+    }
+
+    setLocationStatus('detecting');
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        detectZoneByGPS(pos.coords.latitude, pos.coords.longitude);
+      },
+      () => {
+        // User denied or timeout
+        setLocationStatus('denied');
+        setShowZonePicker(true);
+      },
+      { timeout: 8000, maximumAge: 60000 }
+    );
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Countdown + progress
   const stats = useMemo(() => {
@@ -487,19 +781,31 @@ export default function App() {
       {/* Modals */}
       {showUstaz && <UstazModal type={showUstaz} onClose={() => setShowUstaz(null)} />}
       {showQuiz && <QuizGame onClose={() => setShowQuiz(false)} onXP={addXP} />}
+      {showZonePicker && (
+        <ZonePicker
+          onSelect={(z) => {
+            setZoneCode(z.code);
+            setZoneName(`${z.state} · ${z.label.split('/')[0].trim()}`);
+            setShowZonePicker(false);
+            setLocationStatus('found');
+            fetchPrayersByZone(z.code);
+          }}
+          onClose={() => setShowZonePicker(false)}
+        />
+      )}
 
       {/* Header */}
       <header className="bg-gradient-to-br from-emerald-600 to-teal-700 text-white pt-12 pb-8 px-6 rounded-b-[3rem] shadow-xl shadow-emerald-900/20 relative overflow-hidden">
         <div className="absolute inset-0 bg-star-pattern opacity-20" />
         <div className="max-w-md mx-auto relative">
           <div className="flex justify-between items-start mb-6">
-            <div className="flex items-center gap-3">
-              <div className="w-14 h-14 bg-white/20 backdrop-blur rounded-2xl flex items-center justify-center text-3xl shadow-inner border border-white/30 animate-float">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-14 h-14 bg-white/20 backdrop-blur rounded-2xl flex-shrink-0 flex items-center justify-center text-3xl shadow-inner border border-white/30 animate-float">
                 🐹
               </div>
-              <div>
+              <div className="min-w-0">
                 <h1 className="font-display text-2xl text-shadow">Geng Puasa</h1>
-                <div className="flex items-center gap-2 mt-1">
+                <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                   <span className="text-[10px] font-black bg-white/20 px-2 py-0.5 rounded-full uppercase tracking-wider">
                     {level.title}
                   </span>
@@ -507,9 +813,25 @@ export default function App() {
                     Lvl {level.level}
                   </span>
                 </div>
+                {/* Tappable location chip */}
+                <button
+                  onClick={() => setShowZonePicker(true)}
+                  className="flex items-center gap-1 mt-1.5 text-[10px] font-black bg-white/15 hover:bg-white/25 px-2 py-1 rounded-full transition-all max-w-[180px]"
+                  title="Tukar kawasan"
+                >
+                  <MapPin size={9} className="flex-shrink-0" />
+                  <span className="truncate">
+                    {locationStatus === 'detecting' ? '📡 Mengesan...' :
+                     locationStatus === 'denied'    ? '⚠️ Pilih kawasan →' :
+                     locationStatus === 'error'     ? '⚠️ Tukar kawasan →' :
+                     zoneName                       ? zoneName :
+                     zoneCode                       ? zoneCode :
+                     '📡 Mengesan...'}
+                  </span>
+                </button>
               </div>
             </div>
-            <div className="text-right">
+            <div className="text-right flex-shrink-0">
               <p className="text-[10px] font-black opacity-60 uppercase tracking-widest">Ramadan 1447H</p>
               <p className="text-sm font-black">
                 {currentTime.toLocaleDateString('ms-MY', { day: 'numeric', month: 'short', year: 'numeric' })}
@@ -802,19 +1124,33 @@ export default function App() {
               </div>
             </div>
 
-            {/* Reset button */}
-            <button
-              onClick={() => {
-                if (window.confirm('Reset semua data? Ini tak boleh diundo!')) {
-                  setCompletedMissions([]);
-                  setTotalXP(0);
-                  setStreakDays(0);
-                }
-              }}
-              className="w-full flex items-center justify-center gap-2 text-slate-300 text-xs font-black py-4 border-2 border-dashed border-slate-100 rounded-2xl hover:border-red-200 hover:text-red-400 transition-all"
-            >
-              <RotateCcw size={14} /> Reset Progress
-            </button>
+            {/* Reset + Change Location */}
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowZonePicker(true)}
+                className="flex-1 flex items-center justify-center gap-2 text-slate-400 text-xs font-black py-4 border-2 border-dashed border-slate-100 rounded-2xl hover:border-emerald-200 hover:text-emerald-500 transition-all"
+              >
+                <MapPin size={14} /> Tukar Kawasan
+              </button>
+              <button
+                onClick={() => {
+                  if (window.confirm('Reset semua data? Ini tak boleh diundo!')) {
+                    setCompletedMissions([]);
+                    setTotalXP(0);
+                    setStreakDays(0);
+                    localStorage.removeItem('gp_zone');
+                    localStorage.removeItem('gp_zone_name');
+                    setZoneCode(null);
+                    setZoneName('');
+                    setLocationStatus('idle');
+                    setShowZonePicker(true);
+                  }
+                }}
+                className="flex-1 flex items-center justify-center gap-2 text-slate-300 text-xs font-black py-4 border-2 border-dashed border-slate-100 rounded-2xl hover:border-red-200 hover:text-red-400 transition-all"
+              >
+                <RotateCcw size={14} /> Reset Progress
+              </button>
+            </div>
           </div>
         )}
       </main>
