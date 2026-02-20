@@ -827,11 +827,22 @@ export default function App() {
       {showZonePicker && (
         <ZonePicker
           onSelect={(z) => {
-            setZoneCode(z.code);
-            setZoneName(`${z.state} · ${z.label.split('/')[0].trim()}`);
+            const code = z.code;
+            const name = `${z.state} · ${z.label.split('/')[0].trim()}`;
+            // 1. Update zone identity immediately
+            setZoneCode(code);
+            setZoneName(name);
+            // 2. Persist to localStorage right now so a refresh uses the new zone
+            localStorage.setItem('gp_zone', code);
+            localStorage.setItem('gp_zone_name', name);
+            // 3. Clear stale prayer times so the grid shows "loading..." not old zone's times
+            setPrayerTimes(null);
+            // 4. Show detecting status while fetch is in-flight
+            setLocationStatus('detecting');
+            // 5. Close picker
             setShowZonePicker(false);
-            setLocationStatus('found');
-            fetchPrayersByZone(z.code);
+            // 6. Fetch — will call setLocationStatus('found') and setPrayerTimes() when done
+            fetchPrayersByZone(code);
           }}
           onClose={() => setShowZonePicker(false)}
         />
@@ -906,14 +917,17 @@ export default function App() {
             {/* Countdown Card */}
             <div className="bg-white rounded-[2rem] p-6 card-glow relative overflow-hidden">
               <div className="absolute top-3 right-3 bg-emerald-50 text-emerald-600 text-[9px] font-black px-2 py-1 rounded-full uppercase tracking-wider">
-                {stats.isIftar ? '🌙 Masa Berbuka!' : '⏳ Kira Masa'}
+                {!prayerTimes ? '📡 Memuatkan...' : stats.isIftar ? '🌙 Masa Berbuka!' : '⏳ Kira Masa'}
               </div>
 
               <div className="relative z-10 text-center">
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">
                   {stats.isIftar ? 'ALHAMDULILLAH!' : 'Masa Berbuka'}
                 </p>
-                <div className={`font-display text-6xl mb-5 tracking-tight transition-colors ${stats.isIftar ? 'text-amber-500' : 'text-emerald-600'}`}>
+                <div className={`font-display text-6xl mb-5 tracking-tight transition-colors ${
+                  !prayerTimes ? 'text-slate-300 animate-pulse' :
+                  stats.isIftar ? 'text-amber-500' : 'text-emerald-600'
+                }`}>
                   {stats.isIftar ? '🎉 IFTAR!' : stats.timer}
                 </div>
 
@@ -932,7 +946,7 @@ export default function App() {
                     className="absolute transition-all duration-1000"
                     style={{ left: `calc(${stats.progress}% - 16px)` }}
                   >
-                    <div className="text-4xl filter drop-shadow-lg animate-float">🐹</div>
+                    <div className={`text-4xl filter drop-shadow-lg ${prayerTimes ? 'animate-float' : 'animate-pulse'}`}>🐹</div>
                   </div>
                   <div className="absolute right-0 text-3xl">🌴</div>
                   <div className="absolute left-0 text-2xl">🏡</div>
@@ -992,7 +1006,7 @@ export default function App() {
             </button>
 
             {/* Prayer Times */}
-            <div className="bg-slate-900 text-white rounded-[2rem] p-5 shadow-2xl">
+            <div className="bg-slate-900 text-white rounded-[2rem] p-5 shadow-2xl" key={zoneCode || 'default'}>
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2 opacity-50 text-[10px] font-black uppercase tracking-widest">
                   <Clock size={11} /> Jadual Solat Hari Ini
