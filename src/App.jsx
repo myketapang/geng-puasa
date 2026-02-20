@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import {
   Moon, Sun, MapPin, Trophy, Volume2, CheckCircle2,
   Heart, Star, Clock, Coffee, Utensils, Zap, Gift,
-  RotateCcw, ChevronUp, Sparkles, X
+  RotateCcw, ChevronUp, Sparkles, X, Calendar, Award,
+  BookOpen, Smile, Target, AlertCircle
 } from 'lucide-react';
 
 // ─────────────────────────────────────────────
@@ -224,6 +225,50 @@ function getZoneInfo(zoneCode) {
   return ALL_ZONES.find(z => z.code === zoneCode) || null;
 }
 
+/**
+ * Calculate time remaining until next prayer
+ */
+function getNextPrayer(prayerTimes) {
+  const now = new Date();
+  const currentTime = now.getHours() * 60 + now.getMinutes();
+  
+  const prayers = [
+    { name: 'Subuh', time: prayerTimes.subuh, icon: '🌙' },
+    { name: 'Syuruk', time: prayerTimes.syuruk, icon: '☀️' },
+    { name: 'Zuhur', time: prayerTimes.zuhur, icon: '☀️' },
+    { name: 'Asar', time: prayerTimes.asar, icon: '☀️' },
+    { name: 'Maghrib', time: prayerTimes.maghrib, icon: '🌙' },
+    { name: 'Isyak', time: prayerTimes.isyak, icon: '🌙' }
+  ];
+
+  for (let prayer of prayers) {
+    if (prayer.time === '--:--') continue;
+    
+    const [hours, minutes] = prayer.time.split(':').map(Number);
+    const prayerTimeInMinutes = hours * 60 + minutes;
+    
+    if (prayerTimeInMinutes > currentTime) {
+      const diff = prayerTimeInMinutes - currentTime;
+      const hoursLeft = Math.floor(diff / 60);
+      const minutesLeft = diff % 60;
+      return {
+        ...prayer,
+        remaining: `${hoursLeft}j ${minutesLeft}m`,
+        diff
+      };
+    }
+  }
+  
+  // If all prayers passed, get tomorrow's Subuh
+  return {
+    name: 'Subuh (Esok)',
+    time: prayerTimes.subuh,
+    icon: '🌙',
+    remaining: 'Esok',
+    diff: null
+  };
+}
+
 // ─────────────────────────────────────────────
 // CONFETTI ENGINE
 // ─────────────────────────────────────────────
@@ -380,6 +425,7 @@ const UstazModal = ({ type, onClose }) => {
     setSpeaking(true);
     const text = content.rumi || content.tip;
     const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'ms-MY';
     utterance.onend = () => setSpeaking(false);
     utterance.onerror = () => setSpeaking(false);
     window.speechSynthesis.speak(utterance);
@@ -437,15 +483,108 @@ const UstazModal = ({ type, onClose }) => {
 };
 
 // ─────────────────────────────────────────────
+// MISSIONS PAGE
+// ─────────────────────────────────────────────
+const MissionsPage = ({ missions, onMissionToggle, currentDay }) => {
+  // Group missions by category
+  const groupedMissions = missions.reduce((acc, mission) => {
+    if (!acc[mission.category]) {
+      acc[mission.category] = [];
+    }
+    acc[mission.category].push(mission);
+    return acc;
+  }, {});
+
+  const categoryIcons = {
+    ibadah: '🕌',
+    amalan: '💫',
+    sunnah: '🌴',
+    fun: '🎮',
+    akhlak: '🤝',
+    ilmu: '📚',
+    boss: '👑'
+  };
+
+  const categoryColors = {
+    ibadah: 'bg-emerald-100 text-emerald-700',
+    amalan: 'bg-blue-100 text-blue-700',
+    sunnah: 'bg-amber-100 text-amber-700',
+    fun: 'bg-purple-100 text-purple-700',
+    akhlak: 'bg-pink-100 text-pink-700',
+    ilmu: 'bg-indigo-100 text-indigo-700',
+    boss: 'bg-red-100 text-red-700'
+  };
+
+  return (
+    <div className="px-4 pb-24">
+      <h2 className="font-display text-xl text-slate-800 mb-4">Semua Misi Ramadan</h2>
+      
+      {Object.entries(groupedMissions).map(([category, missions]) => (
+        <div key={category} className="mb-6">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-2xl">{categoryIcons[category]}</span>
+            <h3 className="font-bold text-slate-700 capitalize">{category}</h3>
+            <span className={`text-xs px-2 py-1 rounded-full ${categoryColors[category]}`}>
+              {missions.filter(m => m.completed).length}/{missions.length}
+            </span>
+          </div>
+          
+          <div className="space-y-3">
+            {missions.map(mission => (
+              <div 
+                key={mission.day}
+                className={`bg-white rounded-xl p-4 shadow-sm border transition-all ${
+                  mission.completed ? 'border-emerald-200 bg-emerald-50/50' : 'border-slate-100'
+                } ${mission.day === currentDay && !mission.completed ? 'ring-2 ring-emerald-500 ring-offset-2' : ''}`}
+              >
+                <div className="flex items-start gap-3">
+                  <div className={`text-3xl w-12 h-12 rounded-xl flex items-center justify-center ${
+                    mission.completed ? 'bg-emerald-200' : 'bg-emerald-50'
+                  }`}>
+                    {mission.icon}
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h4 className="font-bold text-slate-800">{mission.title}</h4>
+                        <p className="text-xs text-slate-400 mt-1">Hari {mission.day}</p>
+                      </div>
+                      <span className="text-xs font-black text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full">
+                        +{mission.xp} XP
+                      </span>
+                    </div>
+                    <p className="text-sm text-slate-600 mt-2">{mission.task}</p>
+                    <button
+                      onClick={() => onMissionToggle(mission.day)}
+                      disabled={mission.completed}
+                      className={`mt-3 w-full py-2 rounded-xl text-xs font-bold transition-colors ${
+                        mission.completed
+                          ? 'bg-emerald-500 text-white cursor-default'
+                          : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
+                      }`}
+                    >
+                      {mission.completed ? '✓ Selesai' : 'Tanda Selesai'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────
 // MAIN APP COMPONENT
 // ─────────────────────────────────────────────
 function App() {
   // State management
   const [currentTab, setCurrentTab] = useState('utama');
   const [selectedZone, setSelectedZone] = useState(() => {
-    // Load from localStorage or use default
     const saved = localStorage.getItem('selectedZone');
-    return saved || 'WLY01'; // Default to KL
+    return saved || 'WLY01';
   });
   const [zonePickerOpen, setZonePickerOpen] = useState(false);
   const [prayerData, setPrayerData] = useState(null);
@@ -463,6 +602,7 @@ function App() {
   const [showGame, setShowGame] = useState(false);
   const [capybaraMood, setCapybaraMood] = useState('chill');
   const [searchQuery, setSearchQuery] = useState('');
+  const [nextPrayer, setNextPrayer] = useState(null);
 
   // Refs
   const initialLoadDone = useRef(false);
@@ -471,12 +611,26 @@ function App() {
   // PRAYER API FETCHING
   // ─────────────────────────────────────────
 
-  // Fetch prayer times when zone changes
   useEffect(() => {
     fetchPrayerTimes(selectedZone);
   }, [selectedZone]);
 
-  // Save to localStorage when state changes
+  // Update next prayer countdown every minute
+  useEffect(() => {
+    if (prayerTimes) {
+      updateNextPrayer();
+      const interval = setInterval(updateNextPrayer, 60000); // Update every minute
+      return () => clearInterval(interval);
+    }
+  }, [prayerTimes]);
+
+  const updateNextPrayer = () => {
+    if (prayerTimes) {
+      setNextPrayer(getNextPrayer(prayerTimes));
+    }
+  };
+
+  // Save to localStorage
   useEffect(() => {
     localStorage.setItem('selectedZone', selectedZone);
   }, [selectedZone]);
@@ -494,7 +648,7 @@ function App() {
     const interval = setInterval(() => {
       const randomIndex = Math.floor(Math.random() * CAPYBARA_MOODS.length);
       setCapybaraMood(CAPYBARA_MOODS[randomIndex].mood);
-    }, 30000); // Change every 30 seconds
+    }, 30000);
     return () => clearInterval(interval);
   }, []);
 
@@ -503,12 +657,10 @@ function App() {
     setPrayerError(null);
     
     try {
-      // JAKIM e-solat API
       const today = new Date();
       const year = today.getFullYear();
       const month = String(today.getMonth() + 1).padStart(2, '0');
       
-      // Using the correct JAKIM API endpoint
       const url = `https://www.e-solat.gov.my/index.php?r=esolatApi/takwimsolat&period=month&zone=${zoneCode}&year=${year}&month=${month}`;
       
       console.log('Fetching prayer times for zone:', zoneCode);
@@ -529,8 +681,6 @@ function App() {
     } catch (error) {
       console.error('Error fetching prayer times:', error);
       setPrayerError('Gagal muat turun waktu solat. Sila cuba lagi.');
-      
-      // Fallback to mock data for demonstration
       setPrayerData(getMockPrayerData());
     } finally {
       setPrayerLoading(false);
@@ -564,13 +714,11 @@ function App() {
   // COMPUTED PROPERTIES
   // ─────────────────────────────────────────
 
-  // Get today's prayer times
   const todayPrayer = useMemo(() => {
     if (!prayerData?.prayerTime) return null;
     return findTodayPrayer(prayerData.prayerTime);
   }, [prayerData]);
 
-  // Format prayer times for display
   const prayerTimes = useMemo(() => {
     if (!todayPrayer) {
       return {
@@ -595,12 +743,10 @@ function App() {
     };
   }, [todayPrayer]);
 
-  // Get current zone info
   const currentZoneInfo = useMemo(() => {
     return getZoneInfo(selectedZone);
   }, [selectedZone]);
 
-  // Filter zones by search
   const filteredZones = useMemo(() => {
     if (!searchQuery) return ALL_ZONES;
     
@@ -612,7 +758,6 @@ function App() {
     );
   }, [searchQuery]);
 
-  // Group zones by state
   const groupedZones = useMemo(() => {
     return filteredZones.reduce((acc, zone) => {
       if (!acc[zone.state]) {
@@ -623,16 +768,11 @@ function App() {
     }, {});
   }, [filteredZones]);
 
-  // Calculate stats
   const completedMissions = missions.filter(m => m.completed).length;
   const totalMissions = missions.length;
   const progress = (completedMissions / totalMissions) * 100;
-
-  // Get current mission
   const currentDay = new Date().getDate();
   const currentMission = missions.find(m => m.day === currentDay) || missions[0];
-
-  // Get earned badges
   const earnedBadges = BADGES.filter(badge => completedMissions >= badge.req);
 
   // ─────────────────────────────────────────
@@ -693,7 +833,6 @@ function App() {
           </button>
         </div>
 
-        {/* Search input */}
         <div className="mb-4">
           <input
             type="text"
@@ -704,7 +843,6 @@ function App() {
           />
         </div>
 
-        {/* Zones list */}
         <div className="overflow-y-auto flex-1">
           {Object.keys(groupedZones).length === 0 ? (
             <p className="text-center text-slate-400 py-8">Tiada kawasan dijumpai</p>
@@ -747,28 +885,14 @@ function App() {
       {/* Confetti container */}
       <div id="confetti-container" className="fixed inset-0 pointer-events-none z-50" />
 
-      {/* Zone Picker Modal */}
+      {/* Modals */}
       {zonePickerOpen && renderZonePicker()}
-
-      {/* Quiz Game Modal */}
-      {showGame && (
-        <QuizGame 
-          onClose={() => setShowGame(false)} 
-          onXP={handleXPAdd}
-        />
-      )}
-
-      {/* Ustaz Modal */}
-      {ustazModal && (
-        <UstazModal 
-          type={ustazModal} 
-          onClose={() => setUstazModal(null)} 
-        />
-      )}
+      {showGame && <QuizGame onClose={() => setShowGame(false)} onXP={handleXPAdd} />}
+      {ustazModal && <UstazModal type={ustazModal} onClose={() => setUstazModal(null)} />}
 
       {/* Main Content */}
       <div className="max-w-md mx-auto bg-white/60 backdrop-blur-sm shadow-xl min-h-screen relative overflow-hidden">
-        {/* Header with zone selector */}
+        {/* Header */}
         <div className="bg-emerald-600 text-white px-6 pt-8 pb-6 rounded-b-3xl shadow-lg relative overflow-hidden">
           <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cGF0aCBkPSJNMzAgMTBhMjAgMjAgMCAwIDEgMCA0MCAyMCAyMCAwIDAgMSAwLTQweiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJyZ2JhKDI1NSwyNTUsMjU1LDAuMSkiIHN0cm9rZS13aWR0aD0iMiIvPjwvc3ZnPg==')] opacity-20" />
           
@@ -784,7 +908,6 @@ function App() {
               </div>
             </div>
 
-            {/* Zone selector button - shows selected zone */}
             <button
               onClick={() => setZonePickerOpen(true)}
               className="flex items-center gap-2 bg-white/20 hover:bg-white/30 transition-colors px-4 py-3 rounded-2xl w-full"
@@ -801,14 +924,32 @@ function App() {
           </div>
         </div>
 
+        {/* Countdown Timer */}
+        {nextPrayer && nextPrayer.remaining && (
+          <div className="px-4 -mt-3 relative z-20">
+            <div className="bg-gradient-to-r from-emerald-500 to-teal-500 rounded-xl p-4 shadow-lg text-white">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Clock size={20} />
+                  <span className="text-sm font-bold">Next: {nextPrayer.name}</span>
+                </div>
+                <span className="text-lg font-black">{nextPrayer.remaining}</span>
+              </div>
+              <p className="text-xs opacity-80 mt-1">Waktu {nextPrayer.name}: {nextPrayer.time}</p>
+            </div>
+          </div>
+        )}
+
         {/* Prayer Times */}
-        <div className="px-4 -mt-6 relative z-20">
+        <div className="px-4 mt-4">
           <div className="bg-white rounded-2xl shadow-xl p-5 border border-slate-100">
             <div className="flex justify-between items-center mb-3">
               <h2 className="font-display text-lg text-slate-800">Waktu Solat</h2>
               <div className="flex items-center gap-1 text-xs bg-emerald-50 px-3 py-1 rounded-full">
                 <Sun size={12} className="text-emerald-600" />
-                <span className="font-bold text-emerald-700">{new Date().toLocaleDateString('ms-MY', { day: 'numeric', month: 'long' })}</span>
+                <span className="font-bold text-emerald-700">
+                  {new Date().toLocaleDateString('ms-MY', { day: 'numeric', month: 'long' })}
+                </span>
               </div>
             </div>
 
@@ -819,6 +960,7 @@ function App() {
               </div>
             ) : prayerError ? (
               <div className="py-8 text-center">
+                <AlertCircle size={40} className="text-red-400 mx-auto mb-2" />
                 <p className="text-red-500 text-sm mb-2">{prayerError}</p>
                 <button 
                   onClick={() => fetchPrayerTimes(selectedZone)}
@@ -842,126 +984,157 @@ function App() {
           </div>
         </div>
 
-        {/* Capybara Mood Component */}
-        <div className="px-4 mt-4">
-          <div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl p-4 text-white shadow-lg">
-            <div className="flex items-center gap-3">
-              <div className="text-4xl bg-white/20 w-16 h-16 rounded-2xl flex items-center justify-center">
-                {CAPYBARA_MOODS.find(m => m.mood === capybaraMood)?.emoji || '😎'}
-              </div>
-              <div className="flex-1">
-                <p className="text-xs opacity-80 font-bold">Ustaz Capybara cakap...</p>
-                <p className="font-bold text-sm">{CAPYBARA_MOODS.find(m => m.mood === capybaraMood)?.text}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Quick Actions */}
-        <div className="px-4 mt-4 grid grid-cols-3 gap-2">
-          <button 
-            onClick={() => setUstazModal('niat')}
-            className="bg-white p-3 rounded-xl shadow-sm border border-slate-100 flex flex-col items-center gap-1"
-          >
-            <span className="text-xl">🌙</span>
-            <span className="text-[10px] font-bold">Niat</span>
-          </button>
-          <button 
-            onClick={() => setUstazModal('berbuka')}
-            className="bg-white p-3 rounded-xl shadow-sm border border-slate-100 flex flex-col items-center gap-1"
-          >
-            <span className="text-xl">🌴</span>
-            <span className="text-[10px] font-bold">Doa Buka</span>
-          </button>
-          <button 
-            onClick={() => setUstazModal('tanya')}
-            className="bg-white p-3 rounded-xl shadow-sm border border-slate-100 flex flex-col items-center gap-1"
-          >
-            <span className="text-xl">🤲</span>
-            <span className="text-[10px] font-bold">Tanya Ustaz</span>
-          </button>
-        </div>
-
-        {/* Mission of the Day */}
-        <div className="px-4 mt-4">
-          <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
-            <div className="flex justify-between items-center mb-3">
-              <h3 className="font-display text-slate-800">Misi Hari Ini</h3>
-              <span className="text-xs bg-emerald-50 px-3 py-1 rounded-full font-bold text-emerald-600">
-                Hari {currentDay}
-              </span>
-            </div>
-            
-            {currentMission && (
-              <div className="flex items-start gap-3">
-                <div className="text-3xl bg-emerald-50 w-14 h-14 rounded-xl flex items-center justify-center">
-                  {currentMission.icon}
-                </div>
-                <div className="flex-1">
-                  <h4 className="font-bold text-slate-800">{currentMission.title}</h4>
-                  <p className="text-xs text-slate-400 mt-1">{currentMission.task}</p>
-                  <div className="flex items-center justify-between mt-3">
-                    <span className="text-xs font-black text-emerald-600">+{currentMission.xp} XP</span>
-                    <button
-                      onClick={() => handleMissionToggle(currentMission.day)}
-                      disabled={currentMission.completed}
-                      className={`px-4 py-2 rounded-full text-xs font-bold transition-colors ${
-                        currentMission.completed
-                          ? 'bg-emerald-100 text-emerald-400 cursor-not-allowed'
-                          : 'bg-emerald-500 text-white hover:bg-emerald-600'
-                      }`}
-                    >
-                      {currentMission.completed ? 'Selesai ✓' : 'Tanda Selesai'}
-                    </button>
+        {/* Dynamic Content Based on Tab */}
+        {currentTab === 'utama' && (
+          <>
+            {/* Capybara Mood */}
+            <div className="px-4 mt-4">
+              <div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl p-4 text-white shadow-lg">
+                <div className="flex items-center gap-3">
+                  <div className="text-4xl bg-white/20 w-16 h-16 rounded-2xl flex items-center justify-center">
+                    {CAPYBARA_MOODS.find(m => m.mood === capybaraMood)?.emoji || '😎'}
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-xs opacity-80 font-bold">Ustaz Capybara cakap...</p>
+                    <p className="font-bold text-sm">{CAPYBARA_MOODS.find(m => m.mood === capybaraMood)?.text}</p>
                   </div>
                 </div>
               </div>
-            )}
-          </div>
-        </div>
-
-        {/* Progress Bar */}
-        <div className="px-4 mt-4">
-          <div className="bg-white rounded-xl p-4 shadow-sm border border-slate-100">
-            <div className="flex justify-between items-center mb-2">
-              <p className="text-xs font-bold text-slate-400">Progress Ramadan</p>
-              <p className="text-xs font-black text-emerald-600">{completedMissions}/{totalMissions} Misi</p>
             </div>
-            <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-gradient-to-r from-emerald-400 to-teal-500 rounded-full transition-all duration-500"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
-          </div>
-        </div>
 
-        {/* Badges */}
-        <div className="px-4 mt-4 pb-24">
-          <div className="flex justify-between items-center mb-3">
-            <h3 className="font-display text-slate-800">Badges</h3>
-            <span className="text-xs text-slate-400">{earnedBadges.length}/{BADGES.length}</span>
-          </div>
-          <div className="grid grid-cols-3 gap-2">
-            {BADGES.map(badge => {
-              const earned = completedMissions >= badge.req;
-              return (
-                <div 
-                  key={badge.name}
-                  className={`bg-white rounded-xl p-3 text-center border transition-all ${
-                    earned 
-                      ? `bg-gradient-to-br ${badge.color} text-white border-transparent shadow-md` 
-                      : 'border-slate-100 opacity-40'
-                  }`}
-                >
-                  <span className="text-2xl block mb-1">{badge.icon}</span>
-                  <p className="text-[10px] font-black">{badge.name}</p>
-                  <p className="text-[8px] opacity-70 mt-1">{badge.desc}</p>
+            {/* Quick Actions */}
+            <div className="px-4 mt-4 grid grid-cols-3 gap-2">
+              <button 
+                onClick={() => setUstazModal('niat')}
+                className="bg-white p-3 rounded-xl shadow-sm border border-slate-100 flex flex-col items-center gap-1 hover:bg-emerald-50 transition-colors"
+              >
+                <span className="text-xl">🌙</span>
+                <span className="text-[10px] font-bold">Niat</span>
+              </button>
+              <button 
+                onClick={() => setUstazModal('berbuka')}
+                className="bg-white p-3 rounded-xl shadow-sm border border-slate-100 flex flex-col items-center gap-1 hover:bg-emerald-50 transition-colors"
+              >
+                <span className="text-xl">🌴</span>
+                <span className="text-[10px] font-bold">Doa Buka</span>
+              </button>
+              <button 
+                onClick={() => setUstazModal('tanya')}
+                className="bg-white p-3 rounded-xl shadow-sm border border-slate-100 flex flex-col items-center gap-1 hover:bg-emerald-50 transition-colors"
+              >
+                <span className="text-xl">🤲</span>
+                <span className="text-[10px] font-bold">Tanya Ustaz</span>
+              </button>
+            </div>
+
+            {/* Mission of the Day */}
+            <div className="px-4 mt-4">
+              <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
+                <div className="flex justify-between items-center mb-3">
+                  <h3 className="font-display text-slate-800">Misi Hari Ini</h3>
+                  <span className="text-xs bg-emerald-50 px-3 py-1 rounded-full font-bold text-emerald-600">
+                    Hari {currentDay}
+                  </span>
                 </div>
-              );
-            })}
+                
+                {currentMission && (
+                  <div className="flex items-start gap-3">
+                    <div className="text-3xl bg-emerald-50 w-14 h-14 rounded-xl flex items-center justify-center">
+                      {currentMission.icon}
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="font-bold text-slate-800">{currentMission.title}</h4>
+                      <p className="text-xs text-slate-400 mt-1">{currentMission.task}</p>
+                      <div className="flex items-center justify-between mt-3">
+                        <span className="text-xs font-black text-emerald-600">+{currentMission.xp} XP</span>
+                        <button
+                          onClick={() => handleMissionToggle(currentMission.day)}
+                          disabled={currentMission.completed}
+                          className={`px-4 py-2 rounded-full text-xs font-bold transition-colors ${
+                            currentMission.completed
+                              ? 'bg-emerald-100 text-emerald-400 cursor-not-allowed'
+                              : 'bg-emerald-500 text-white hover:bg-emerald-600'
+                          }`}
+                        >
+                          {currentMission.completed ? 'Selesai ✓' : 'Tanda Selesai'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Progress Bar */}
+            <div className="px-4 mt-4">
+              <div className="bg-white rounded-xl p-4 shadow-sm border border-slate-100">
+                <div className="flex justify-between items-center mb-2">
+                  <p className="text-xs font-bold text-slate-400">Progress Ramadan</p>
+                  <p className="text-xs font-black text-emerald-600">{completedMissions}/{totalMissions} Misi</p>
+                </div>
+                <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-gradient-to-r from-emerald-400 to-teal-500 rounded-full transition-all duration-500"
+                    style={{ width: `${progress}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Badges Preview */}
+            <div className="px-4 mt-4 pb-24">
+              <div className="flex justify-between items-center mb-3">
+                <h3 className="font-display text-slate-800">Badges Terkini</h3>
+                <button 
+                  onClick={() => setCurrentTab('misi')}
+                  className="text-xs text-emerald-600 font-bold"
+                >
+                  Lihat Semua →
+                </button>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                {BADGES.slice(0, 3).map(badge => {
+                  const earned = completedMissions >= badge.req;
+                  return (
+                    <div 
+                      key={badge.name}
+                      className={`bg-white rounded-xl p-3 text-center border transition-all ${
+                        earned 
+                          ? `bg-gradient-to-br ${badge.color} text-white border-transparent shadow-md` 
+                          : 'border-slate-100 opacity-40'
+                      }`}
+                    >
+                      <span className="text-2xl block mb-1">{badge.icon}</span>
+                      <p className="text-[10px] font-black">{badge.name}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </>
+        )}
+
+        {currentTab === 'misi' && (
+          <MissionsPage 
+            missions={missions}
+            onMissionToggle={handleMissionToggle}
+            currentDay={currentDay}
+          />
+        )}
+
+        {currentTab === 'game' && (
+          <div className="px-4 py-8 pb-24 text-center">
+            <Sparkles size={48} className="text-emerald-500 mx-auto mb-4" />
+            <h2 className="font-display text-2xl text-slate-800 mb-2">Mini Games</h2>
+            <p className="text-slate-400 mb-6">Tekan butang di bawah untuk main!</p>
+            <button
+              onClick={() => setShowGame(true)}
+              className="bg-gradient-to-r from-emerald-500 to-teal-500 text-white px-8 py-4 rounded-2xl font-black text-lg shadow-lg hover:shadow-xl transition-all"
+            >
+              Main Kuiz Kilat! ⚡
+            </button>
           </div>
-        </div>
+        )}
 
         {/* Navigation */}
         <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white/80 backdrop-blur-md border-t border-slate-200 px-4 py-2 rounded-t-3xl shadow-lg">
@@ -983,7 +1156,7 @@ function App() {
               icon={<Sparkles />} 
               label="GAME" 
               active={currentTab === 'game'} 
-              onClick={() => setShowGame(true)}
+              onClick={() => setCurrentTab('game')}
             />
             <NavBtn 
               icon={<RotateCcw />} 
