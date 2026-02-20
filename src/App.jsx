@@ -83,38 +83,53 @@ const ALL_ZONES = [
  * Convert Unix timestamp (seconds) to "HH:MM" string in local time.
  * The API returns prayer times as Unix epoch seconds.
  */
+/**
+ * Convert Unix timestamp (seconds) → "HH:MM" in local time.
+ * API returns prayer times as integer Unix epoch seconds.
+ */
 function tsToHHMM(ts) {
-  if (!ts) return '--:--';
-  const d = new Date(ts * 1000);
+  if (ts === null || ts === undefined || ts === 0) return '--:--';
+  // Defensive: if somehow a string "HH:MM" sneaks in, return it as-is
+  if (typeof ts === 'string' && ts.includes(':')) return ts.substring(0, 5);
+  const d = new Date(Number(ts) * 1000);
+  if (isNaN(d.getTime())) return '--:--';
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
 /**
- * Find today's prayer entry from the prayers array.
- * Each entry has a `date` field in "YYYY-MM-DD" or Unix timestamp form.
+ * Find today's prayer entry from the prayerTime array.
+ * Confirmed API format:
+ *   - date: "YYYY-MM-DD" string (e.g. "2025-04-15")
+ *   - day:  day-of-week integer 1–7 (1=Monday), NOT day-of-month
+ *   - imsak, fajr, syuruk, dhuhr, asr, maghrib, isha: Unix timestamps (seconds)
  */
-function findTodayPrayer(prayers) {
-  if (!prayers?.length) return null;
-  const today = new Date();
-  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+function findTodayPrayer(prayerTime) {
+  if (!prayerTime?.length) return null;
 
-  // Try matching by date string first
-  const byDate = prayers.find(p => {
-    if (typeof p.date === 'string') return p.date === todayStr;
-    if (typeof p.date === 'number') {
-      const d = new Date(p.date * 1000);
-      const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-      return ds === todayStr;
+  const today = new Date();
+  // Build "YYYY-MM-DD" string in LOCAL time (not UTC) to match API's date field
+  const year  = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, '0');
+  const date  = String(today.getDate()).padStart(2, '0');
+  const todayStr = `${year}-${month}-${date}`;
+
+  // Primary: exact match on date string
+  const match = prayerTime.find(p => {
+    if (typeof p.date === 'string') {
+      // Handle both "YYYY-MM-DD" and "DD-MMM-YYYY" or other formats safely
+      return p.date.startsWith(todayStr) || p.date === todayStr;
     }
     return false;
   });
-  if (byDate) return byDate;
+  if (match) return match;
 
-  // Fallback: match by day of month
-  return prayers.find(p => {
-    const day = p.day || (p.date ? new Date(p.date * 1000).getDate() : null);
-    return day === today.getDate();
-  }) || prayers[today.getDate() - 1] || prayers[0];
+  // Secondary fallback: index by day-of-month (today.getDate() - 1)
+  // Array is ordered Day 1..N of the month
+  const byIndex = prayerTime[today.getDate() - 1];
+  if (byIndex) return byIndex;
+
+  // Last resort
+  return prayerTime[0];
 }
 
 const MISSIONS = [
@@ -576,11 +591,19 @@ export default function App() {
       const res = await fetch(`https://api.waktusolat.app/v2/solat/zone/${code}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      const prayers = data.prayers || data.data?.prayers || [];
-      const todayEntry = findTodayPrayer(prayers);
-      if (!todayEntry) throw new Error('No prayer data for today');
 
-      // Normalise: convert Unix ts → HH:MM strings
+      // Confirmed API response shape:
+      // { zone: "SGR01", prayerTime: [ { date, day, imsak, fajr, syuruk, dhuhr, asr, maghrib, isha }, ... ] }
+      // Key is "prayerTime" NOT "prayers"
+      const prayerTime = data.prayerTime || data.prayers || data.data?.prayerTime || data.data?.prayers || [];
+
+      if (prayerTime.length === 0) throw new Error('Empty prayerTime array from API');
+
+      const todayEntry = findTodayPrayer(prayerTime);
+      if (!todayEntry) throw new Error('No entry found for today');
+
+      console.log(`[Prayer] Zone: ${code}, Date match: ${todayEntry.date}`, todayEntry);
+
       setPrayerTimes({
         imsak:   tsToHHMM(todayEntry.imsak),
         fajr:    tsToHHMM(todayEntry.fajr),
@@ -592,9 +615,9 @@ export default function App() {
       });
       setLocationStatus('found');
     } catch (err) {
-      console.error('Prayer fetch error:', err);
-      // Hard-coded Selangor fallback so UI never breaks
-      setPrayerTimes({ imsak: '05:47', fajr: '05:57', syuruk: '07:08', dhuhr: '13:20', asr: '16:39', maghrib: '19:22', isha: '20:34' });
+      console.error('[Prayer] Fetch error:', err);
+      // Selangor fallback — never break UI
+      setPrayerTimes({ imsak: '05:47', fajr: '05:57', syuruk: '07:10', dhuhr: '13:20', asr: '16:39', maghrib: '19:22', isha: '20:34' });
       setLocationStatus('error');
     }
   }, []);
@@ -606,24 +629,33 @@ export default function App() {
    */
   const detectZoneByGPS = useCallback(async (lat, lng) => {
     try {
+      // GPS endpoint: GET /v2/solat/gps?lat={lat}&lng={lng}
+      // Returns same structure as zone endpoint, plus zone code at root
       const res = await fetch(`https://api.waktusolat.app/v2/solat/gps?lat=${lat}&lng=${lng}`);
-      if (!res.ok) throw new Error(`GPS zone error HTTP ${res.status}`);
+      if (!res.ok) throw new Error(`GPS HTTP ${res.status}`);
       const data = await res.json();
-      const detectedZone = data.zone || data.data?.zone;
-      if (!detectedZone) throw new Error('No zone returned from GPS');
 
-      // Find matching zone label
+      // Zone code lives at data.zone (root level)
+      const detectedZone = data.zone || data.data?.zone;
+      if (!detectedZone) throw new Error('No zone in GPS response');
+
+      console.log(`[GPS] Detected zone: ${detectedZone}`);
+
+      // Find readable label from our zone list
       const zoneInfo = ALL_ZONES.find(z => z.code === detectedZone);
-      const label = zoneInfo ? `${zoneInfo.state} · ${zoneInfo.label.split('/')[0].trim()}` : detectedZone;
+      const label = zoneInfo
+        ? `${zoneInfo.state} · ${zoneInfo.label.split('/')[0].trim()}`
+        : detectedZone;
 
       setZoneCode(detectedZone);
       setZoneName(label);
 
-      // If GPS response already includes prayers, parse directly
-      const prayers = data.prayers || data.data?.prayers || [];
-      if (prayers.length > 0) {
-        const todayEntry = findTodayPrayer(prayers);
+      // GPS response also includes prayerTime array — parse it directly
+      const prayerTime = data.prayerTime || data.prayers || data.data?.prayerTime || data.data?.prayers || [];
+      if (prayerTime.length > 0) {
+        const todayEntry = findTodayPrayer(prayerTime);
         if (todayEntry) {
+          console.log(`[GPS] Using inline prayer data, date: ${todayEntry.date}`);
           setPrayerTimes({
             imsak:   tsToHHMM(todayEntry.imsak),
             fajr:    tsToHHMM(todayEntry.fajr),
@@ -637,11 +669,10 @@ export default function App() {
           return;
         }
       }
-      // Otherwise fetch by detected zone
+      // No inline data — fetch by detected zone code
       await fetchPrayersByZone(detectedZone);
     } catch (err) {
-      console.error('GPS zone detection failed:', err);
-      // Fall back to manual picker
+      console.error('[GPS] Zone detection failed:', err);
       setLocationStatus('denied');
       setShowZonePicker(true);
     }
@@ -678,8 +709,18 @@ export default function App() {
 
   // Countdown + progress
   const stats = useMemo(() => {
-    const maghribStr = prayerTimes?.maghrib || '19:22';
-    const imsakStr = prayerTimes?.imsak || '05:47';
+    if (!prayerTimes) {
+      return { timer: '--:--:--', progress: 0, isIftar: false, maghrib: '--:--', imsak: '--:--' };
+    }
+
+    const maghribStr = prayerTimes.maghrib || '19:22';
+    const imsakStr   = prayerTimes.imsak   || '05:47';
+
+    // If times haven't parsed yet (showing '--:--'), don't compute
+    if (maghribStr === '--:--' || imsakStr === '--:--') {
+      return { timer: '--:--:--', progress: 0, isIftar: false, maghrib: maghribStr, imsak: imsakStr };
+    }
+
     const [mh, mm] = maghribStr.split(':').map(Number);
     const [ih, im] = imsakStr.split(':').map(Number);
 
@@ -690,13 +731,15 @@ export default function App() {
     const isIftar = diff <= 0;
 
     const hours = Math.max(0, Math.floor(diff / 3600000));
-    const mins = Math.max(0, Math.floor((diff % 3600000) / 60000));
-    const secs = Math.max(0, Math.floor((diff % 60000) / 1000));
+    const mins  = Math.max(0, Math.floor((diff % 3600000) / 60000));
+    const secs  = Math.max(0, Math.floor((diff % 60000) / 1000));
 
     const startMin = ih * 60 + im;
-    const endMin = mh * 60 + mm;
-    const nowMin = currentTime.getHours() * 60 + currentTime.getMinutes();
-    const progress = isIftar ? 100 : Math.max(0, Math.min(99, ((nowMin - startMin) / (endMin - startMin)) * 100));
+    const endMin   = mh * 60 + mm;
+    const nowMin   = currentTime.getHours() * 60 + currentTime.getMinutes();
+    const progress = isIftar
+      ? 100
+      : Math.max(0, Math.min(99, ((nowMin - startMin) / (endMin - startMin)) * 100));
 
     return {
       timer: `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`,
@@ -950,17 +993,101 @@ export default function App() {
 
             {/* Prayer Times */}
             <div className="bg-slate-900 text-white rounded-[2rem] p-5 shadow-2xl">
-              <div className="flex items-center gap-2 mb-4 opacity-50 text-[10px] font-black uppercase tracking-widest">
-                <Clock size={11} /> Jadual Solat Hari Ini
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2 opacity-50 text-[10px] font-black uppercase tracking-widest">
+                  <Clock size={11} /> Jadual Solat Hari Ini
+                </div>
+                {zoneCode && (
+                  <span className="text-[9px] font-black bg-white/10 px-2 py-1 rounded-full opacity-60">
+                    {zoneCode}
+                  </span>
+                )}
               </div>
-              <div className="grid grid-cols-3 gap-3">
-                <PrayerCard label="Imsak" time={prayerTimes?.imsak || '05:47'} icon={<Coffee size={14}/>} />
-                <PrayerCard label="Zohor" time={prayerTimes?.dhuhr || '13:20'} icon={<Sun size={14}/>} />
-                <PrayerCard label="Asar" time={prayerTimes?.asr || '16:39'} icon={<ChevronUp size={14}/>} />
-                <PrayerCard label="Maghrib" time={prayerTimes?.maghrib || '19:22'} icon={<Moon size={14}/>} highlight />
-                <PrayerCard label="Isyak" time={prayerTimes?.isha || '20:34'} icon={<Star size={14}/>} />
-                <PrayerCard label="Subuh" time={prayerTimes?.fajr || '05:57'} icon={<Sparkles size={14}/>} />
-              </div>
+              {!prayerTimes ? (
+                <div className="text-center py-6 opacity-40">
+                  <p className="text-2xl mb-2">⏳</p>
+                  <p className="text-[10px] font-bold uppercase tracking-wider">Memuatkan waktu solat...</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-3 gap-3">
+                  {/* Order: Imsak, Subuh, Syuruk, Zohor, Asar, Maghrib, Isyak */}
+                  {/* Each using the correct prayerTimes key that matches the API */}
+                  <PrayerCard
+                    label="Imsak"
+                    time={prayerTimes.imsak}
+                    icon={<Coffee size={14}/>}
+                    highlight={(() => {
+                      const now = currentTime.getHours() * 60 + currentTime.getMinutes();
+                      const [h, m] = (prayerTimes.imsak || '00:00').split(':').map(Number);
+                      const next = (prayerTimes.fajr || '00:00').split(':').map(Number);
+                      return now >= h * 60 + m && now < next[0] * 60 + next[1];
+                    })()}
+                  />
+                  <PrayerCard
+                    label="Subuh"
+                    time={prayerTimes.fajr}
+                    icon={<Sparkles size={14}/>}
+                    highlight={(() => {
+                      const now = currentTime.getHours() * 60 + currentTime.getMinutes();
+                      const [h, m] = (prayerTimes.fajr || '00:00').split(':').map(Number);
+                      const next = (prayerTimes.syuruk || '00:00').split(':').map(Number);
+                      return now >= h * 60 + m && now < next[0] * 60 + next[1];
+                    })()}
+                  />
+                  <PrayerCard
+                    label="Syuruk"
+                    time={prayerTimes.syuruk}
+                    icon={<Sun size={14}/>}
+                    highlight={false}
+                  />
+                  <PrayerCard
+                    label="Zohor"
+                    time={prayerTimes.dhuhr}
+                    icon={<Sun size={14}/>}
+                    highlight={(() => {
+                      const now = currentTime.getHours() * 60 + currentTime.getMinutes();
+                      const [h, m] = (prayerTimes.dhuhr || '00:00').split(':').map(Number);
+                      const next = (prayerTimes.asr || '00:00').split(':').map(Number);
+                      return now >= h * 60 + m && now < next[0] * 60 + next[1];
+                    })()}
+                  />
+                  <PrayerCard
+                    label="Asar"
+                    time={prayerTimes.asr}
+                    icon={<ChevronUp size={14}/>}
+                    highlight={(() => {
+                      const now = currentTime.getHours() * 60 + currentTime.getMinutes();
+                      const [h, m] = (prayerTimes.asr || '00:00').split(':').map(Number);
+                      const next = (prayerTimes.maghrib || '00:00').split(':').map(Number);
+                      return now >= h * 60 + m && now < next[0] * 60 + next[1];
+                    })()}
+                  />
+                  <PrayerCard
+                    label="Maghrib"
+                    time={prayerTimes.maghrib}
+                    icon={<Moon size={14}/>}
+                    highlight={(() => {
+                      const now = currentTime.getHours() * 60 + currentTime.getMinutes();
+                      const [h, m] = (prayerTimes.maghrib || '00:00').split(':').map(Number);
+                      const next = (prayerTimes.isha || '00:00').split(':').map(Number);
+                      return now >= h * 60 + m && now < next[0] * 60 + next[1];
+                    })()}
+                  />
+                  <PrayerCard
+                    label="Isyak"
+                    time={prayerTimes.isha}
+                    icon={<Star size={14}/>}
+                    highlight={(() => {
+                      const now = currentTime.getHours() * 60 + currentTime.getMinutes();
+                      const [h, m] = (prayerTimes.isha || '00:00').split(':').map(Number);
+                      return now >= h * 60 + m;
+                    })()}
+                  />
+                  {/* Spacer to keep 3-col grid even */}
+                  <div />
+                  <div />
+                </div>
+              )}
             </div>
 
             {/* Today's Mission Teaser */}
