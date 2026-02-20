@@ -844,62 +844,6 @@ export default function GengPuasa() {
         {tab === 'dashboard' && (
           <div className="space-y-4">
 
-            {/* Prayer Times Panel */}
-            <div className="bg-slate-900 text-white rounded-[2rem] p-5 shadow-2xl">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2 opacity-50 text-[10px] font-black uppercase tracking-widest">
-                  <Clock size={10} /> Waktu Solat Hari Ini
-                </div>
-                {/* Zone displayed here too */}
-                <button
-                  onClick={() => setShowZonePicker(true)}
-                  className="flex items-center gap-1 text-[9px] font-black bg-white/10 hover:bg-white/20 px-2 py-1 rounded-full transition-all"
-                >
-                  <MapPin size={8} />
-                  <span className="max-w-[100px] truncate">{zone.label.split('/')[0].trim()}</span>
-                  <span className="opacity-60">[{zone.code}]</span>
-                </button>
-              </div>
-
-              {loading ? (
-                <div className="text-center py-8 opacity-40">
-                  <RefreshCw size={28} className="mx-auto mb-2 gp-pulse" />
-                  <p className="text-[10px] font-bold uppercase tracking-wider">Memuatkan waktu solat...</p>
-                </div>
-              ) : apiError ? (
-                <div className="text-center py-6">
-                  <AlertCircle size={28} className="mx-auto mb-2 text-red-400" />
-                  <p className="text-[10px] text-red-300 font-bold mb-3">{apiError}</p>
-                  <button onClick={() => loadPrayerTimes(zone.code)}
-                    className="bg-emerald-500 text-white text-xs font-black px-4 py-2 rounded-full flex items-center gap-1.5 mx-auto">
-                    <RefreshCw size={11} /> Cuba Semula
-                  </button>
-                </div>
-              ) : prayerTimes ? (
-                <div className="grid grid-cols-4 gap-2">
-                  {[
-                    { key: 'imsak',   label: 'Imsak',   icon: <Coffee size={12}/> },
-                    { key: 'subuh',   label: 'Subuh',   icon: <Moon size={12}/> },
-                    { key: 'syuruk',  label: 'Syuruk',  icon: <Sun size={12}/> },
-                    { key: 'zohor',   label: 'Zohor',   icon: <Sun size={12}/> },
-                    { key: 'asar',    label: 'Asar',    icon: <ChevronUp size={12}/> },
-                    { key: 'maghrib', label: 'Maghrib', icon: <Moon size={12}/> },
-                    { key: 'isyak',   label: 'Isyak',   icon: <Star size={12}/> },
-                  ].map(p => (
-                    <PrayerCard
-                      key={p.key}
-                      label={p.label}
-                      time={prayerTimes[p.key]}
-                      icon={p.icon}
-                      highlight={currentHighlight === p.key}
-                      isNext={nextPrayer?.label === p.label.toUpperCase()}
-                    />
-                  ))}
-                  <div /> {/* spacer for 4-col grid */}
-                </div>
-              ) : null}
-            </div>
-
             {/* Iftar Countdown */}
             {iftarInfo && (
               <div className="bg-white rounded-[2rem] p-5 shadow-sm border border-slate-100 relative overflow-hidden">
@@ -962,6 +906,64 @@ export default function GengPuasa() {
                 </button>
               ))}
             </div>
+
+            {/* Prayer Times Panel */}
+            <div className="bg-slate-900 text-white rounded-[2rem] p-5 shadow-2xl">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2 opacity-50 text-[10px] font-black uppercase tracking-widest">
+                  <Clock size={10} /> Waktu Solat Hari Ini
+                </div>
+                {/* Zone displayed here too */}
+                <button
+                  onClick={() => setShowZonePicker(true)}
+                  className="flex items-center gap-1 text-[9px] font-black bg-white/10 hover:bg-white/20 px-2 py-1 rounded-full transition-all"
+                >
+                  <MapPin size={8} />
+                  <span className="max-w-[100px] truncate">{zone.label.split('/')[0].trim()}</span>
+                  <span className="opacity-60">[{zone.code}]</span>
+                </button>
+              </div>
+
+              {loading ? (
+                <div className="text-center py-8 opacity-40">
+                  <RefreshCw size={28} className="mx-auto mb-2 gp-pulse" />
+                  <p className="text-[10px] font-bold uppercase tracking-wider">Memuatkan waktu solat...</p>
+                </div>
+              ) : apiError ? (
+                <div className="text-center py-6">
+                  <AlertCircle size={28} className="mx-auto mb-2 text-red-400" />
+                  <p className="text-[10px] text-red-300 font-bold mb-3">{apiError}</p>
+                  <button onClick={() => loadPrayerTimes(zone.code)}
+                    className="bg-emerald-500 text-white text-xs font-black px-4 py-2 rounded-full flex items-center gap-1.5 mx-auto">
+                    <RefreshCw size={11} /> Cuba Semula
+                  </button>
+                </div>
+              ) : prayerTimes ? (
+                <div className="grid grid-cols-4 gap-2">
+                  {[
+                    { key: 'imsak',   label: 'Imsak',   icon: <Coffee size={12}/> },
+                    { key: 'subuh',   label: 'Subuh',   icon: <Moon size={12}/> },
+                    { key: 'syuruk',  label: 'Syuruk',  icon: <Sun size={12}/> },
+                    { key: 'zohor',   label: 'Zohor',   icon: <Sun size={12}/> },
+                    { key: 'asar',    label: 'Asar',    icon: <ChevronUp size={12}/> },
+                    { key: 'maghrib', label: 'Maghrib', icon: <Moon size={12}/> },
+                    { key: 'isyak',   label: 'Isyak',   icon: <Star size={12}/> },
+                  ].map(p => (
+                    <PrayerCard
+                      key={p.key}
+                      label={p.label}
+                      time={prayerTimes[p.key]}
+                      icon={p.icon}
+                      highlight={currentHighlight === p.key}
+                      isNext={nextPrayer?.label === p.label.toUpperCase()}
+                    />
+                  ))}
+                  <div /> {/* spacer for 4-col grid */}
+                </div>
+              ) : null}
+            </div>
+
+            
 
             {/* Quiz Banner */}
             <button onClick={() => setShowQuiz(true)}
