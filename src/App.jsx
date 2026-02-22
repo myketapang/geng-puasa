@@ -123,29 +123,31 @@ const QUIZ_QUESTIONS = [
   { q: 'Apa yang membatalkan puasa?', options: ['Tidur', 'Makan sengaja', 'Peluh banyak', 'Baca Quran'], ans: 1 },
 ];
 
+
 const USTAZ_SCRIPTS = {
   niat: {
     title: 'Niat Puasa Ramadan',
     arabic: 'نَوَيْتُ صَوْمَ غَدٍ عَنْ أَدَاءِ فَرْضِ شَهْرِ رَمَضَانَ هٰذِهِ السَّنَةِ لِلّٰهِ تَعَالَى',
-    rumi: 'Nawaitu sauma ghadin an adaa-i fardhi syahri Ramadhana hadzihis-sanati lillahi taala.',
-    meaning: 'Sahaja aku berpuasa esok hari untuk menunaikan fardhu Ramadan tahun ini kerana Allah Taala.',
-    tip: 'Niat dibuat dalam hati sebelum Subuh. Ustaz pun baca ni setiap hari! 😊'
+    rumi: 'Nawaitu sawma ghadin ‘an ada’i fardhi syahri Ramadhana hazihis-sanati lillahi ta’ala.',
+    meaning: 'Sahaja aku berpuasa esok hari bagi menunaikan fardhu Ramadan tahun ini kerana Allah Ta’ala.',
+    tip: 'Niat paling penting dalam hati tau! Baca lepas solat Tarawih atau sebelum tidur supaya tak terlupa. Ustaz pun buat macam tu! 😊'
   },
   berbuka: {
     title: 'Doa Berbuka Puasa',
-    arabic: 'اللَّهُمَّ لَكَ صُمْتُ وَبِكَ آمَنْتُ وَعَلَى رِزْقِكَ أَفْطَرْتُ',
-    rumi: 'Allahumma laka sumtu wa bika aamantu wa ala rizqika aftartu.',
-    meaning: 'Ya Allah, keranaMu aku berpuasa, kepadaMu aku beriman, dan dengan rezekiMu aku berbuka.',
-    tip: 'Baca masa nak makan kurma tu! Makan kurma dulu, baru solat Maghrib! 🌴'
+    arabic: 'اللَّهُمَّ لَكَ صُمْتُ وَعَلَى رِزْقِكَ أَفْطَرْتُ بِرَحْمَتِكَ يَا أَرْحَمَ الرَّاحِمِينَ',
+    rumi: 'Allahumma laka sumtu wa ‘ala rizqika aftartu birahmatika ya Arhamar Rahimin.',
+    meaning: 'Ya Allah, kerana-Mu aku berpuasa dan dengan rezeki-Mu aku berbuka, dengan rahmat-Mu wahai Tuhan Yang Maha Pemurah.',
+    tip: 'Jangan gelojoh masa berbuka! Baca doa ni dulu, makan kurma, baru minum air. Sunnah tau! 🌴'
   },
   tanya: {
-    title: 'Ustaz Menjawab!',
+    title: 'Tanya Ustaz!',
     arabic: null,
     rumi: null,
     meaning: null,
-    tip: 'Kalau haus masa main, tak payah telan air liur tu okay? Buang je. Tapi jangan sengaja telan! Kalau rasa lapar sangat, buat aktiviti lain – lukis, main puzzle, baca buku. Masa berlalu laju kalau kita sibuk! Ingat, sabar tu separuh daripada iman. Ustaz pun tengah sabar sama-sama dengan korang! 😄'
+    tip: 'Haus sangat ke tu? Sabar ya, telan air liur sendiri tak batal puasa, jangan risau! Tapi jangan pula pergi minum air paip masa mandi pula! 😂 Kalau rasa lapar, cuba buat benda seronok macam lukis atau baca komik. Kejap je lagi nak Azan Maghrib tu. Ingat, sabar itu separuh daripada iman. Ustaz pun tengah lapar macam korang juga ni! Ganbatte! 😄'
   }
 };
+
 
 // ─────────────────────────────────────────────
 // HELPERS
