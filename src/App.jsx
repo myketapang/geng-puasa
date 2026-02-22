@@ -130,6 +130,7 @@ const USTAZ_SCRIPTS = {
     arabic: 'نَوَيْتُ صَوْمَ غَدٍ عَنْ أَدَاءِ فَرْضِ شَهْرِ رَمَضَانَ هٰذِهِ السَّنَةِ لِلّٰهِ تَعَالَى',
     rumi: 'Nawaitu sawma ghadin ‘an ada’i fardhi syahri Ramadhana hazihis-sanati lillahi ta’ala.',
     meaning: 'Sahaja aku berpuasa esok hari bagi menunaikan fardhu Ramadan tahun ini kerana Allah Ta’ala.',
+    audio: 'assets/audio/niat_puasa.mp3',
     tip: 'Niat paling penting dalam hati tau! Baca lepas solat Tarawih atau sebelum tidur supaya tak terlupa. Ustaz pun buat macam tu! 😊'
   },
   berbuka: {
@@ -137,6 +138,7 @@ const USTAZ_SCRIPTS = {
     arabic: 'اللَّهُمَّ لَكَ صُمْتُ وَعَلَى رِزْقِكَ أَفْطَرْتُ بِرَحْمَتِكَ يَا أَرْحَمَ الرَّاحِمِينَ',
     rumi: 'Allahumma laka sumtu wa ‘ala rizqika aftartu birahmatika ya Arhamar Rahimin.',
     meaning: 'Ya Allah, kerana-Mu aku berpuasa dan dengan rezeki-Mu aku berbuka, dengan rahmat-Mu wahai Tuhan Yang Maha Pemurah.',
+    audio: 'assets/audio/doa_berbuka.mp3',
     tip: 'Jangan gelojoh masa berbuka! Baca doa ni dulu, makan kurma, baru minum air. Sunnah tau! 🌴'
   },
   tanya: {
@@ -144,6 +146,7 @@ const USTAZ_SCRIPTS = {
     arabic: null,
     rumi: null,
     meaning: null,
+    audio: null,
     tip: 'Haus sangat ke tu? Sabar ya, telan air liur sendiri tak batal puasa, jangan risau! Tapi jangan pula pergi minum air paip masa mandi pula! 😂 Kalau rasa lapar, cuba buat benda seronok macam lukis atau baca komik. Kejap je lagi nak Azan Maghrib tu. Ingat, sabar itu separuh daripada iman. Ustaz pun tengah lapar macam korang juga ni! Ganbatte! 😄'
   }
 };
