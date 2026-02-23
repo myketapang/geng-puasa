@@ -153,88 +153,6 @@ const USTAZ_SCRIPTS = {
 
 
 // ─────────────────────────────────────────────
-// AUDIO ENGINE — MP3 first, TTS fallback
-// ─────────────────────────────────────────────
-
-/** Singleton — stop previous audio before starting new one */
-let _activeAudio = null;
-
-/**
- * Play audio for a given ustaz type.
- * Priority: MP3 file → Web Speech API TTS → silent fail
- * Returns a stop() function the caller can use to cancel.
- */
-function playUstazVoice(type, { onStart, onEnd, onError } = {}) {
-  // ── Kill any currently playing audio ──────────
-  if (_activeAudio) {
-    _activeAudio.pause();
-    _activeAudio.currentTime = 0;
-    _activeAudio = null;
-  }
-  if (window.speechSynthesis) window.speechSynthesis.cancel();
-
-  const script = USTAZ_SCRIPTS[type];
-  if (!script) { onEnd?.(); return { stop: () => {} }; }
-
-  // ── Path 1: MP3 ───────────────────────────────
-  if (script.audio) {
-    const audio = new Audio(script.audio);
-    audio.preload = 'auto';
-    _activeAudio = audio;
-
-    audio.addEventListener('play',  () => onStart?.());
-    audio.addEventListener('ended', () => { _activeAudio = null; onEnd?.(); });
-    audio.addEventListener('error', (e) => {
-      console.warn('[Audio] MP3 failed, fallback to TTS:', script.audio, e);
-      _activeAudio = null;
-      _playTTS(script, { onStart, onEnd, onError });
-    });
-
-    const p = audio.play();
-    if (p !== undefined) {
-      p.catch(() => {
-        // Autoplay policy blocked — fallback silently
-        _activeAudio = null;
-        _playTTS(script, { onStart, onEnd, onError });
-      });
-    }
-
-    return {
-      stop: () => {
-        if (_activeAudio === audio) {
-          audio.pause();
-          audio.currentTime = 0;
-          _activeAudio = null;
-        }
-        onEnd?.();
-      }
-    };
-  }
-
-  // ── Path 2: No MP3 defined → TTS directly ─────
-  return _playTTS(script, { onStart, onEnd, onError });
-}
-
-function _playTTS(script, { onStart, onEnd, onError } = {}) {
-  if (!window.speechSynthesis) {
-    console.warn('[Audio] TTS not supported');
-    onError?.('TTS tidak disokong');
-    onEnd?.();
-    return { stop: () => {} };
-  }
-  const text = script.rumi || script.tip || '';
-  const utt = new SpeechSynthesisUtterance(text);
-  utt.lang  = 'ms-MY';
-  utt.rate  = 0.85;
-  utt.pitch = 1.0;
-  utt.onstart = () => onStart?.();
-  utt.onend   = () => onEnd?.();
-  utt.onerror = () => { onError?.('TTS error'); onEnd?.(); };
-  window.speechSynthesis.speak(utt);
-  return { stop: () => { window.speechSynthesis.cancel(); onEnd?.(); } };
-}
-
-// ─────────────────────────────────────────────
 // HELPERS
 // ─────────────────────────────────────────────
 
@@ -321,46 +239,81 @@ function spawnConfetti(count = 25) {
 // ─────────────────────────────────────────────
 // PRAYER API — TWO SOURCES WITH AUTO-FALLBACK
 // ─────────────────────────────────────────────
-async function fetchPrayerAPI(zoneCode) {
+
+/**
+ * Combine an external AbortSignal (from AbortController) with a timeout.
+ * If either fires, the fetch is cancelled.
+ */
+function makeSignal(externalSignal, timeoutMs) {
+  const timeoutController = new AbortController();
+  const timer = setTimeout(() => timeoutController.abort(), timeoutMs);
+
+  const combined = AbortSignal.any
+    ? AbortSignal.any([externalSignal, timeoutController.signal])
+    : externalSignal; // graceful fallback for older browsers
+
+  // Clean up the timer when the external signal fires
+  externalSignal.addEventListener('abort', () => {
+    clearTimeout(timer);
+    timeoutController.abort();
+  }, { once: true });
+
+  return { signal: combined, clearTimer: () => clearTimeout(timer) };
+}
+
+async function fetchPrayerAPI(zoneCode, externalSignal) {
   const today = new Date();
   const year  = today.getFullYear();
   const month = String(today.getMonth() + 1).padStart(2, '0');
 
-  // SOURCE 1: api.waktusolat.app (preferred)
+  // ── SOURCE 1: api.waktusolat.app ──────────────
   try {
+    const { signal, clearTimer } = makeSignal(externalSignal, 6000);
     const res = await fetch(
       `https://api.waktusolat.app/v2/solat/zone/${zoneCode}`,
-      { signal: AbortSignal.timeout(6000) }
+      { signal }
     );
+    clearTimer();
     if (res.ok) {
-      const data = await res.json();
-      const arr  = data.prayerTime || data.prayers || [];
+      const data  = await res.json();
+      const arr   = data.prayerTime || data.prayers || [];
       const entry = findTodayEntry(arr);
       if (entry) {
-        console.log('[API1] waktusolat.app success, zone:', zoneCode, 'date:', entry.date);
+        console.log('[API1] waktusolat.app ✓ zone:', zoneCode, 'date:', entry.date);
         return extractTimes(entry);
       }
+      console.warn('[API1] waktusolat.app: no entry for today, arr length:', arr.length);
+    } else {
+      console.warn('[API1] waktusolat.app HTTP', res.status);
     }
   } catch (e) {
+    // Re-throw AbortError immediately — caller handles it
+    if (e.name === 'AbortError') throw e;
     console.warn('[API1] waktusolat.app failed:', e.message);
   }
 
-  // SOURCE 2: e-solat.gov.my (JAKIM official)
+  // ── SOURCE 2: e-solat.gov.my (JAKIM official) ─
   try {
+    const { signal, clearTimer } = makeSignal(externalSignal, 8000);
     const res = await fetch(
       `https://www.e-solat.gov.my/index.php?r=esolatApi/takwimsolat&period=month&zone=${zoneCode}&year=${year}&month=${month}`,
-      { signal: AbortSignal.timeout(8000) }
+      { signal }
     );
+    clearTimer();
     if (res.ok) {
-      const data = await res.json();
-      const arr  = data.prayerTime || [];
+      const data  = await res.json();
+      const arr   = data.prayerTime || [];
       const entry = findTodayEntry(arr);
       if (entry) {
-        console.log('[API2] e-solat.gov.my success, zone:', zoneCode, 'date:', entry.date);
+        console.log('[API2] e-solat.gov.my ✓ zone:', zoneCode, 'date:', entry.date);
         return extractTimes(entry);
       }
+      console.warn('[API2] e-solat.gov.my: no entry for today');
+    } else {
+      console.warn('[API2] e-solat.gov.my HTTP', res.status);
     }
   } catch (e) {
+    if (e.name === 'AbortError') throw e;
     console.warn('[API2] e-solat.gov.my failed:', e.message);
   }
 
@@ -509,144 +462,67 @@ function ZonePicker({ currentCode, onSelect, onClose }) {
 // ─────────────────────────────────────────────
 function UstazModal({ type, onClose }) {
   const content = USTAZ_SCRIPTS[type];
-  // 'idle' | 'loading' | 'playing' | 'stopped'
-  const [audioState, setAudioState] = useState('idle');
-  const stopRef = useRef(null);
+  const [speaking, setSpeaking] = useState(false);
 
-  // Auto-stop when modal unmounts or type changes
-  useEffect(() => {
-    return () => {
-      stopRef.current?.();
-    };
-  }, [type]);
-
-  const handleClose = () => {
-    stopRef.current?.();
-    onClose();
+  const speak = () => {
+    if (!window.speechSynthesis) return;
+    window.speechSynthesis.cancel();
+    setSpeaking(true);
+    const utt = new SpeechSynthesisUtterance(content.rumi || content.tip);
+    utt.lang = 'ms-MY'; utt.rate = 0.85;
+    utt.onend = () => setSpeaking(false);
+    utt.onerror = () => setSpeaking(false);
+    window.speechSynthesis.speak(utt);
   };
-
-  const handlePlay = () => {
-    if (audioState === 'playing') {
-      // Stop if already playing
-      stopRef.current?.();
-      setAudioState('idle');
-      return;
-    }
-
-    setAudioState('loading');
-    const { stop } = playUstazVoice(type, {
-      onStart: () => setAudioState('playing'),
-      onEnd:   () => setAudioState('idle'),
-      onError: () => setAudioState('idle'),
-    });
-    stopRef.current = stop;
-  };
-
-  const hasAudio = !!(content?.audio || content?.rumi);
-
-  const audioLabel = {
-    idle:    content?.audio ? '🎵 Dengar MP3' : '🔊 Dengar',
-    loading: '⏳ Memuatkan...',
-    playing: '⏹ Berhenti',
-    stopped: '🎵 Dengar Semula',
-  }[audioState];
-
-  const audioBtnClass = {
-    idle:    'bg-emerald-500 text-white shadow-md shadow-emerald-500/30 hover:bg-emerald-600',
-    loading: 'bg-slate-200 text-slate-400 cursor-wait',
-    playing: 'bg-red-100 text-red-600 border-2 border-red-200',
-    stopped: 'bg-emerald-100 text-emerald-600',
-  }[audioState];
 
   return (
-    <div
-      className="fixed inset-0 z-[200] flex items-end justify-center bg-black/70 backdrop-blur-sm"
-      onClick={handleClose}
-    >
+    <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/70 backdrop-blur-sm" onClick={onClose}>
       <div
         className="bg-white w-full max-w-md rounded-t-3xl p-6 pb-10 shadow-2xl"
         style={{ animation: 'slideUp .3s ease' }}
         onClick={e => e.stopPropagation()}
       >
-        {/* Header */}
         <div className="flex justify-between items-center mb-5">
           <div className="flex items-center gap-3">
-            <div className={`w-11 h-11 bg-amber-100 rounded-2xl flex items-center justify-center text-2xl
-              ${audioState === 'playing' ? 'gp-float' : ''}`}>
-              🐹
-            </div>
+            <div className="w-11 h-11 bg-amber-100 rounded-2xl flex items-center justify-center text-2xl">🐹</div>
             <div>
               <h3 className="font-black text-lg text-slate-800">{content.title}</h3>
-              <div className="flex items-center gap-1.5 mt-0.5">
-                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Ustaz Cakap</p>
-                {content.audio && (
-                  <span className="text-[9px] bg-emerald-100 text-emerald-600 font-black px-1.5 py-0.5 rounded-full">MP3</span>
-                )}
-              </div>
+              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Ustaz Cakap</p>
             </div>
           </div>
-          <button onClick={handleClose} className="w-9 h-9 bg-slate-100 rounded-full flex items-center justify-center">
+          <button onClick={onClose} className="w-9 h-9 bg-slate-100 rounded-full flex items-center justify-center">
             <X size={16} className="text-slate-500" />
           </button>
         </div>
 
-        {/* Arabic + Rumi */}
         {content.arabic && (
           <div className="bg-emerald-50 rounded-2xl p-5 mb-3 border border-emerald-100 text-right">
-            <p className="text-xl font-bold text-emerald-800 leading-loose mb-2" dir="rtl">
-              {content.arabic}
-            </p>
+            <p className="text-xl font-bold text-emerald-800 leading-loose mb-2" dir="rtl">{content.arabic}</p>
             <p className="text-xs text-slate-400 italic text-left">{content.rumi}</p>
           </div>
         )}
-
-        {/* Meaning */}
         {content.meaning && (
           <div className="bg-amber-50 rounded-xl px-4 py-3 mb-3 border border-amber-100">
             <p className="text-[10px] font-black text-amber-600 uppercase mb-1">Maksud:</p>
             <p className="text-sm text-slate-600">{content.meaning}</p>
           </div>
         )}
-
-        {/* Tip */}
         <div className="bg-blue-50 rounded-xl px-4 py-3 mb-5 border border-blue-100">
           <p className="text-[10px] font-black text-blue-600 uppercase mb-1">💡 Tip Ustaz:</p>
           <p className="text-sm text-slate-600">{content.tip}</p>
         </div>
 
-        {/* Audio waveform visual when playing */}
-        {audioState === 'playing' && (
-          <div className="flex items-center justify-center gap-1 mb-4">
-            {[...Array(9)].map((_, i) => (
-              <div
-                key={i}
-                className="w-1 bg-emerald-400 rounded-full"
-                style={{
-                  height: `${8 + Math.sin(i * 1.2) * 8 + 8}px`,
-                  animation: `gpPulse ${0.6 + i * 0.1}s ease-in-out infinite alternate`,
-                  animationDelay: `${i * 80}ms`,
-                }}
-              />
-            ))}
-          </div>
-        )}
-
-        {/* Buttons */}
         <div className="flex gap-3">
-          {hasAudio && (
-            <button
-              onClick={handlePlay}
-              disabled={audioState === 'loading'}
-              className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-black transition-all ${audioBtnClass}`}
-            >
-              <Volume2 size={15} className={audioState === 'playing' ? 'gp-pulse' : ''} />
-              {audioLabel}
+          {content.rumi && (
+            <button onClick={speak}
+              className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-black transition-all
+                ${speaking ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-600'}`}>
+              <Volume2 size={15} className={speaking ? 'animate-pulse' : ''} />
+              {speaking ? 'Membaca...' : 'Dengar'}
             </button>
           )}
-          <button
-            onClick={handleClose}
-            className="flex-1 bg-slate-800 text-white py-3 rounded-2xl text-sm font-black"
-          >
+          <button onClick={onClose}
+            className="flex-1 bg-emerald-500 text-white py-3 rounded-2xl text-sm font-black shadow-lg shadow-emerald-500/30">
             FAHAM! ✅
           </button>
         </div>
@@ -796,24 +672,53 @@ export default function GengPuasa() {
   }, [completedDays, totalXP]);
 
   // ── Fetch prayer times whenever zone changes ───
+  const abortControllerRef = useRef(null);
+
   const loadPrayerTimes = useCallback(async (zoneCode) => {
+    if (!zoneCode) return;
+
+    // Cancel any in-flight request before starting a new one
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     setLoading(true);
     setApiError('');
-    setPrayerTimes(null);           // clear old data immediately
+    // Keep old times visible while loading — smoother UX
+    // setPrayerTimes(null);
+
     try {
-      const times = await fetchPrayerAPI(zoneCode);
-      setPrayerTimes(times);
+      const times = await fetchPrayerAPI(zoneCode, controller.signal);
+
+      // Only update state if this request is still the active one
+      if (abortControllerRef.current === controller) {
+        setPrayerTimes(times);
+      }
     } catch (err) {
-      console.error('Prayer fetch error:', err);
-      setApiError('Gagal muat waktu solat. Semak sambungan internet & cuba lagi.');
+      if (err.name === 'AbortError') {
+        // Silently ignore — a newer request has taken over
+        console.log('[Prayer] Fetch aborted for zone:', zoneCode);
+        return;
+      }
+      console.error('[Prayer] Fetch error:', err);
+      if (abortControllerRef.current === controller) {
+        setApiError('Gagal muat waktu solat. Semak sambungan internet & cuba lagi.');
+      }
     } finally {
-      setLoading(false);
+      // Only stop loading spinner if this is still the active request
+      if (abortControllerRef.current === controller) {
+        setLoading(false);
+      }
     }
   }, []);
 
   useEffect(() => {
     loadPrayerTimes(zone.code);
-  }, [zone.code, loadPrayerTimes]);  // ← key fix: depend on zone.code
+    // Abort on unmount
+    return () => { abortControllerRef.current?.abort(); };
+  }, [zone.code, loadPrayerTimes]);
 
   // ── Derived values ────────────────────────────
   const nowMins = currentTime.getHours() * 60 + currentTime.getMinutes();
