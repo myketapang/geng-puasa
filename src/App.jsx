@@ -206,12 +206,13 @@ function extractTimes(entry) {
 
 /** Return the next upcoming prayer label + time given current times object */
 function getNextPrayer(times, nowMins) {
-  const order = ['subuh','syuruk','zohor','asar','maghrib','isyak'];
+  // Include imsak so it can be "next" before fajr
+  const order = ['imsak','subuh','syuruk','zohor','asar','maghrib','isyak'];
   for (const key of order) {
     const mins = parseHHMM(times[key]);
-    if (mins !== null && mins > nowMins) return { label: key.toUpperCase(), time: times[key] };
+    if (mins !== null && mins > nowMins) return { key, label: key.toUpperCase(), time: times[key] };
   }
-  return { label: 'SUBUH', time: times.subuh }; // wrap to next day
+  return { key: 'imsak', label: 'IMSAK', time: times.imsak }; // wrap to next day's imsak
 }
 
 // Confetti
@@ -344,19 +345,30 @@ function NavBtn({ icon, label, active, onClick, badge }) {
 }
 
 /** Single prayer time card in the dark prayer panel */
-function PrayerCard({ label, time, icon, highlight, isNext }) {
+function PrayerCard({ label, time, icon, isCurrent, isNext }) {
   return (
-    <div className={`flex flex-col items-center p-2.5 rounded-xl transition-all
-      ${highlight || isNext ? 'bg-emerald-500/25 ring-1 ring-emerald-400/50' : 'bg-white/5'}`}
+    <div className={`flex flex-col items-center p-2.5 rounded-xl transition-all relative
+      ${isCurrent ? 'bg-emerald-500/30 ring-1 ring-emerald-400/60'
+      : isNext    ? 'bg-amber-500/20 ring-1 ring-amber-400/40'
+      :             'bg-white/5'}`}
     >
       <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-1.5 text-xs
-        ${highlight || isNext ? 'bg-emerald-500/40 text-emerald-200' : 'bg-white/10 text-white/50'}`}>
+        ${isCurrent ? 'bg-emerald-500/50 text-emerald-200'
+        : isNext    ? 'bg-amber-500/30 text-amber-300'
+        :             'bg-white/10 text-white/50'}`}>
         {icon}
       </div>
       <p className="text-[8px] font-bold opacity-40 uppercase tracking-wider mb-0.5">{label}</p>
       <p className={`text-xs font-black tracking-tight
-        ${highlight || isNext ? 'text-emerald-300' : 'text-white'}`}>{time}</p>
-      {isNext && <span className="text-[7px] font-black text-emerald-400 mt-0.5 uppercase">NEXT</span>}
+        ${isCurrent ? 'text-emerald-300'
+        : isNext    ? 'text-amber-300'
+        :             'text-white'}`}>{time}</p>
+      {isCurrent && (
+        <span className="text-[7px] font-black text-emerald-400 mt-0.5 uppercase">NOW</span>
+      )}
+      {isNext && !isCurrent && (
+        <span className="text-[7px] font-black text-amber-400 mt-0.5 uppercase animate-pulse">NEXT</span>
+      )}
     </div>
   );
 }
@@ -748,7 +760,7 @@ export default function GengPuasa() {
     return { timer, isIftar, progress, maghrib: prayerTimes.maghrib, imsak: prayerTimes.imsak };
   }, [prayerTimes, nowMins, currentTime]);
 
-  // Current highlighted prayer
+  // Current highlighted prayer (the most recent one whose time has passed)
   const currentHighlight = useMemo(() => {
     if (!prayerTimes) return null;
     const order = ['imsak','subuh','syuruk','zohor','asar','maghrib','isyak'];
@@ -756,7 +768,7 @@ export default function GengPuasa() {
       const mins = parseHHMM(prayerTimes[order[i]]);
       if (mins !== null && nowMins >= mins) return order[i];
     }
-    return 'isyak'; // late night, past isyak
+    return null; // before imsak — nothing highlighted yet
   }, [prayerTimes, nowMins]);
 
   // Level
@@ -1023,8 +1035,8 @@ export default function GengPuasa() {
                       label={p.label}
                       time={prayerTimes[p.key]}
                       icon={p.icon}
-                      highlight={currentHighlight === p.key}
-                      isNext={nextPrayer?.label === p.label.toUpperCase()}
+                      isCurrent={currentHighlight === p.key}
+                      isNext={nextPrayer?.key === p.key}
                     />
                   ))}
                   <div /> {/* spacer for 4-col grid */}
