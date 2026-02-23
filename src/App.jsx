@@ -738,6 +738,10 @@ function QuizGame({ onClose, onXP }) {
     </div>
   );
 }
+
+// ─────────────────────────────────────────────
+// MAIN APP
+// ─────────────────────────────────────────────
 export default function GengPuasa() {
   // ── Persisted state ──────────────────────────
   const [zone, setZone] = useState(() => {
@@ -768,9 +772,6 @@ export default function GengPuasa() {
   const [justDone, setJustDone]     = useState(null);
   const [missionFilter, setMissionFilter] = useState('all');
 
-  // ── Abort controller ref for prayer API ─────
-  const abortControllerRef = useRef(null);
-
   // ── Clock ────────────────────────────────────
   useEffect(() => {
     const t = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -796,104 +797,23 @@ export default function GengPuasa() {
 
   // ── Fetch prayer times whenever zone changes ───
   const loadPrayerTimes = useCallback(async (zoneCode) => {
-    if (!zoneCode) return;
-    
-    // Cancel any previous ongoing request
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
-
-    // Create new controller for this request
-    const controller = new AbortController();
-    abortControllerRef.current = controller;
-
     setLoading(true);
     setApiError('');
-    // Keep old prayer times visible while loading new ones
-    // setPrayerTimes(null); // Uncomment if you want to clear old data immediately
-
+    setPrayerTimes(null);           // clear old data immediately
     try {
-      const times = await fetchPrayerAPI(zoneCode, controller.signal);
-      
-      // Only update state if this request wasn't aborted
+      const times = await fetchPrayerAPI(zoneCode);
       setPrayerTimes(times);
     } catch (err) {
-      // Don't show error if it was manually aborted
-      if (err.name === 'AbortError') {
-        console.log('Fetch aborted: New request started');
-        return;
-      }
-      
       console.error('Prayer fetch error:', err);
       setApiError('Gagal muat waktu solat. Semak sambungan internet & cuba lagi.');
     } finally {
-      // Only stop loading if this is still the active request
-      if (abortControllerRef.current === controller) {
-        setLoading(false);
-      }
+      setLoading(false);
     }
-  }, []); // Empty dependency array since we don't depend on any props/state
+  }, []);
 
-  // Trigger fetch when zone changes
   useEffect(() => {
     loadPrayerTimes(zone.code);
-    
-    // Cleanup: abort any ongoing request when component unmounts or zone changes
-    return () => {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
-    };
-  }, [zone.code, loadPrayerTimes]);
-
-  // ── Modified fetchPrayerAPI to accept abort signal ──
-  async function fetchPrayerAPI(zoneCode, signal) {
-    const today = new Date();
-    const year  = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-
-    // SOURCE 1: api.waktusolat.app (preferred)
-    try {
-      const res = await fetch(
-        `https://api.waktusolat.app/v2/solat/zone/${zoneCode}`,
-        { signal, timeout: 6000 }
-      );
-      if (res.ok) {
-        const data = await res.json();
-        const arr  = data.prayerTime || data.prayers || [];
-        const entry = findTodayEntry(arr);
-        if (entry) {
-          console.log('[API1] waktusolat.app success, zone:', zoneCode, 'date:', entry.date);
-          return extractTimes(entry);
-        }
-      }
-    } catch (e) {
-      if (e.name === 'AbortError') throw e; // Re-throw abort errors
-      console.warn('[API1] waktusolat.app failed:', e.message);
-    }
-
-    // SOURCE 2: e-solat.gov.my (JAKIM official)
-    try {
-      const res = await fetch(
-        `https://www.e-solat.gov.my/index.php?r=esolatApi/takwimsolat&period=month&zone=${zoneCode}&year=${year}&month=${month}`,
-        { signal, timeout: 8000 }
-      );
-      if (res.ok) {
-        const data = await res.json();
-        const arr  = data.prayerTime || [];
-        const entry = findTodayEntry(arr);
-        if (entry) {
-          console.log('[API2] e-solat.gov.my success, zone:', zoneCode, 'date:', entry.date);
-          return extractTimes(entry);
-        }
-      }
-    } catch (e) {
-      if (e.name === 'AbortError') throw e; // Re-throw abort errors
-      console.warn('[API2] e-solat.gov.my failed:', e.message);
-    }
-
-    throw new Error('Kedua-dua sumber API gagal');
-  }
+  }, [zone.code, loadPrayerTimes]);  // ← key fix: depend on zone.code
 
   // ── Derived values ────────────────────────────
   const nowMins = currentTime.getHours() * 60 + currentTime.getMinutes();
